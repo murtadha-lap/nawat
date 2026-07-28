@@ -25,7 +25,7 @@ from .cache import Cache, open_cache
 from .config import Config
 from .errors import NawatError
 from .keys import KINDS, Key
-from .units import bar, human_age, human_bytes
+from .units import bar, human_age, human_bytes, parse_size
 
 PROGRAM = "nawat"
 
@@ -303,7 +303,12 @@ def cmd_hold(cache: Cache, args) -> int:
             )
 
         out_key = Key.parse(args.out) if args.out else None
-        out_dir = cache.local_path(out_key) if out_key else Path(env.get("NAWAT_OUT_DIR", "")) or None
+        if out_key is not None:
+            out_dir = cache.local_path(out_key)
+        elif os.environ.get("NAWAT_OUT_DIR"):
+            out_dir = Path(os.environ["NAWAT_OUT_DIR"])
+        else:
+            out_dir = None
         if out_dir is not None:
             out_dir.mkdir(parents=True, exist_ok=True)
             env["NAWAT_OUT_DIR"] = str(out_dir)
@@ -405,7 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_add)
 
     p = sub.add_parser("registry", help="what object storage holds, cached or not")
-    p.add_argument("kind", nargs="*", choices=[*KINDS, []], help="limit to these kinds")
+    p.add_argument("kind", nargs="*", choices=KINDS, help="limit to these kinds")
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_registry)
 
@@ -441,12 +446,8 @@ def _config_from(args) -> Config:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if getattr(args, "command", None) == "hold" and args.command_list_marker if False else False:
-        pass
-    if hasattr(args, "command") and getattr(args, "run", None) is cmd_hold:
-        # argparse.REMAINDER keeps the leading "--"; drop it.
-        if args.command and args.command[0] == "--":
-            args.command = args.command[1:]
+    if getattr(args, "run", None) is cmd_hold and args.command and args.command[0] == "--":
+        args.command = args.command[1:]  # argparse.REMAINDER keeps the leading --
     try:
         cache = open_cache(_config_from(args))
         return args.run(cache, args)
