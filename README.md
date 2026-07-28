@@ -1,185 +1,258 @@
 # Nawāt (نواة)
 
-Self-hosted fine-tuning and serving platform for storage-constrained GPU hosts.
+**Fine-tune on a small disk as if it were a big one.**
 
-**Built: Phases 1–2.** The storage core — local disk as a disposable cache over an
-S3-compatible object store (RustFS), where nothing is deleted until verified present
-in the store at the moment of deletion — and the control plane: run submission and
-execution, durable run records, streaming logs, inference sessions with adapter
-hot-loading and idle teardown, and an HTTP API covering all of it.
-
-Phases 3–7 (metrics, web interface, evaluation, agent authoring, hardening) are not
-built yet; see `nawat-prd.md` §11.
+Nawāt is a self-hosted platform for fine-tuning and serving open-weight models on a
+single GPU workstation whose local storage is far smaller than its working corpus.
+Object storage is the source of truth for every model, dataset and run artifact;
+local disk is a disposable cache managed automatically. You write an ordinary
+Unsloth training script, submit it, and never touch a file to make room for it.
 
 ---
 
-## The rule everything follows
+## The problem
 
-> Object storage is truth. Local disk is disposable. Verify before deleting, always.
-> If space cannot be freed safely, refuse and say why.
+A single-GPU workstation — 16 GB of VRAM, ~200 GB of NVMe — working against
+terabytes of models and data fails the same way every week:
 
-Concretely:
+1. A run dies partway through because the disk filled with checkpoints.
+2. `rm -rf` frees space — and occasionally destroys an adapter that was never
+   backed up anywhere.
+3. The next experiment re-downloads the same 16 GB base model from the internet,
+   because the local copy was deleted to make room.
+4. Merged FP16 exports and GGUF quantizations pile up silently until the disk
+   fills again.
+5. Which script, which data, which hyperparameters produced which adapter lives
+   in shell history and file names.
 
-- An artifact is evicted only after its replica has been listed and compared **file by
-  file, by name and size**, at the moment of deletion — never from a cached flag.
-- If the store is unreachable, nothing is evicted. You get a full disk and an
-  explanation, not a gamble.
-- Artifacts in use are held by a **lease keyed to a live process**, not a timeout, so a
-  six-hour run cannot have its weights pulled out from under it and a crashed run
-  cannot deadlock the cache.
-- Downloads land in a staging directory and are renamed into place atomically. An
-  interrupted transfer never appears complete.
+Experiment throughput ends up bounded by storage housekeeping, not GPU time —
+and results are hard to reproduce weeks later.
+
+## What Nawāt does about it
+
+| Failure | What Nawāt does |
+| --- | --- |
+| Disk fills mid-run | A configurable cache ceiling; least-recently-used artifacts are evicted automatically to make room |
+| `rm -rf` loses work | Nothing is deleted until its replica in object storage is verified **file by file, by name and size, at the moment of deletion**. Unreplicated, in-use or unverifiable artifacts are never touched — if space cannot be freed safely, you get a refusal that says exactly what is holding it |
+| Repeat downloads | A model or dataset is fetched from the internet **once, ever**: the first fetch writes through to object storage, and every later use — including after eviction — comes from there |
+| Exports accumulate | Every artifact class a run writes (`adapter/`, `merged/`, `gguf/`) is uploaded, verified, and reclaimed from local disk the moment the run succeeds |
+| Lost provenance | Every run records its script, inputs, parameters, log and resulting artifact keys, durably, whether it succeeds or fails |
+
+Plus: serve any base model with vLLM and **hot-load a trained LoRA in seconds —
+no merge, no restart** — so testing a fine-tune costs nothing; and after seeding,
+training runs with hub access disabled, so a run can never silently download.
 
 ---
 
-## Bring-up
-
-### 1. RustFS
-
-RustFS runs as its own systemd service on this host.
-
-```bash
-curl -O https://rustfs.com/install_rustfs.sh && bash install_rustfs.sh
-sudo $EDITOR /etc/default/rustfs      # RUSTFS_ACCESS_KEY, RUSTFS_SECRET_KEY, RUSTFS_VOLUMES
-sudo systemctl restart rustfs
-sudo systemctl status rustfs --no-pager
-```
-
-Defaults: S3 API on `:9000`, console on `:9001`, data under `/data/rustfs0`. Point
-`RUSTFS_VOLUMES` at the 8 TB volume.
-
-### 2. Nawāt
+## Quick start
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e .
-cp .env.example .env && $EDITOR .env  # endpoint, bucket, credentials, cache ceiling
-```
-
-`nawat` reads `.env` on its own — the nearest one at or above the working
-directory, the way git finds its root — so there is nothing to source and nothing
-to re-export in a new shell. Real environment variables still win over the file,
-so `NAWAT_CACHE_CEILING=40GB nawat free` overrides for one command. Use
-`--env-file PATH` to point elsewhere, or `--no-env-file` to ignore it entirely.
-`nawat check` prints which file is in force, because misconfiguration is usually
-the wrong file rather than the wrong value.
-
-### 3. Confirm
-
-```bash
+cp .env.example .env && $EDITOR .env    # endpoint, bucket, credentials, cache ceiling
 nawat check --create-bucket
 ```
 
-This does not ping the endpoint — it writes, lists, verifies and deletes a probe
-object, because reachable credentials that cannot delete still cannot run this
-platform.
+`nawat` finds `.env` on its own (nearest one at or above the working directory);
+nothing to source. Exported variables still win for one-off overrides.
+
+Nawāt speaks to any S3-compatible object store. This deployment uses
+[RustFS](https://docs.rustfs.com/installation/linux/quick-start) running as a
+systemd service; point `NAWAT_S3_ENDPOINT` at it. `nawat check` proves the pairing
+works — it writes, lists, verifies and deletes a probe object rather than pinging.
 
 ```text
 ok    configuration              /home/lap/lap/tr/.env
 ok    cache root                 /home/lap/nawat/cache
-ok    state directory            /home/lap/nawat/cache/.nawat
-ok    state database             /home/lap/nawat/cache/.nawat/nawat.sqlite3
-ok    cache ceiling              120 GB ceiling + 10.0 GB reserve on a 250 GB filesystem (216 GB free)
-ok    object storage reachable   http://127.0.0.1:9000 · bucket nawat
+ok    cache ceiling              120 GB ceiling + 10.0 GB reserve on a 250 GB filesystem
+ok    object storage reachable   http://192.168.0.155:9000 · bucket ai-model
 ok    object storage round trip  write, list, verify and delete all succeeded
 
 Ready. Object storage is reachable and this host can publish, verify and reclaim.
 ```
 
----
-
 ## Keys
 
-One name for a thing, mapping 1:1 onto an object-storage prefix and a local path.
+One name per artifact, mapping 1:1 onto an object-storage prefix and a local path:
 
 ```text
-models/unsloth/Qwen2.5-VL-7B-Instruct
-datasets/ocr-arabic-v3
+models/unsloth/Qwen3.5-0.8B      ← the tail IS the Hugging Face repo id
+datasets/unsloth/LaTeX_OCR
 runs/2026-07-28-a91f/adapter
-exports/qwen-ocr-v3-gguf
 ```
 
-For `models/` and `datasets/`, the part after the kind **is** the upstream hub repo id.
-That is what makes "downloaded from the internet exactly once, ever" fall out without a
-mapping table: fetch it once, it is written through to object storage, and every later
-resolution — including after eviction — comes from the store.
+That is the whole trick behind "downloaded once, ever": resolving
+`models/unsloth/Qwen3.5-0.8B` checks local disk, then object storage, then — only
+if neither has it — Hugging Face, writing through to object storage before
+returning. No mapping table, no registration step.
 
 ---
 
-## Running an experiment from the shell
+## Using it with Unsloth
 
-Put a training script in the workspace (`NAWAT_WORKSPACE`), then:
+Take the standard Unsloth vision notebook — Qwen3.5-0.8B fine-tuned on
+`unsloth/LaTeX_OCR`. Three lines change, all of them the lines that name a
+location. Everything Unsloth-specific stays exactly as the notebook has it.
 
-```bash
-nawat submit train.py \
-  --model   models/unsloth/Qwen2.5-VL-7B-Instruct \
-  --dataset datasets/ocr-arabic-v3 \
-  --param   learning_rate=2e-4 --param max_steps=600
-```
-
-That single command stages the inputs from object storage (evicting whatever it must,
-safely, to make room), holds them under lease for the lifetime of the trainer, runs it
-with hub access disabled, streams its log to your terminal, then uploads every artifact
-class it produced (`adapter/`, `gguf/`, …) under `runs/<id>/…`, verifies each file by
-name and size, and reclaims the local copy. Nothing is deleted by hand at any point.
-
-The run is offline by construction: an input that was not declared fails immediately
-instead of silently downloading. A failed run publishes nothing but keeps its record
-and its log — locally and in object storage — for diagnosis.
-
-Afterwards:
-
-```bash
-nawat runs                 # history
-nawat run <id>             # everything recorded about one run
-nawat logs <id> [-f]       # its log, or follow it live
-nawat cancel <id>          # stop it and release what it holds
-```
-
-`nawat hold ... -- CMD` remains for ad-hoc commands that are not run records.
-
-The script receives its configuration through the environment, so it runs unmodified
-outside the platform:
-
-| Variable | Meaning |
-| --- | --- |
-| `NAWAT_RUN_ID` | Identifier for this run |
-| `NAWAT_OUT_DIR` | Where to write artifacts |
-| `NAWAT_MODEL_DIR` | Staged base model |
-| `NAWAT_DATASET_DIR` | Staged dataset (first, if several) |
-| `NAWAT_DATASET_DIRS` | JSON array of every staged dataset |
-| `NAWAT_INPUTS` | JSON object mapping every input key to its path |
+**`~/nawat/workspace/train_latex_ocr.py`:**
 
 ```python
-import os, pathlib
+# The Unsloth LaTeX-OCR notebook as a Nawāt run. The NAWAT_* variables are just
+# paths and strings, so this script also runs unmodified outside the platform.
+import os, pathlib, tempfile
 
-model = pathlib.Path(os.environ["NAWAT_MODEL_DIR"])
-data  = pathlib.Path(os.environ["NAWAT_DATASET_DIR"])
-out   = pathlib.Path(os.environ["NAWAT_OUT_DIR"])
+MODEL_DIR = os.environ["NAWAT_MODEL_DIR"]      # staged models/unsloth/Qwen3.5-0.8B
+DATA_DIR  = os.environ["NAWAT_DATASET_DIR"]    # staged datasets/unsloth/LaTeX_OCR
+OUT       = pathlib.Path(os.environ["NAWAT_OUT_DIR"])
+
+from unsloth import FastVisionModel
+
+model, tokenizer = FastVisionModel.from_pretrained(
+    MODEL_DIR,                                 # ← was "unsloth/Qwen3.5-0.8B"
+    load_in_4bit = False,
+    use_gradient_checkpointing = "unsloth",
+)
+model = FastVisionModel.get_peft_model(
+    model,
+    finetune_vision_layers     = True,
+    finetune_language_layers   = True,
+    finetune_attention_modules = True,
+    finetune_mlp_modules       = True,
+    r = 16, lora_alpha = 16, lora_dropout = 0,
+    bias = "none", random_state = 3407,
+)
+
+from datasets import load_dataset
+dataset = load_dataset(DATA_DIR, split = "train")   # ← was "unsloth/LaTeX_OCR"
+
+instruction = "Write the LaTeX representation for this image."
+def convert(sample):
+    return {"messages": [
+        {"role": "user", "content": [
+            {"type": "text",  "text":  instruction},
+            {"type": "image", "image": sample["image"]}]},
+        {"role": "assistant", "content": [
+            {"type": "text",  "text":  sample["text"]}]},
+    ]}
+converted_dataset = [convert(s) for s in dataset]
+
+from unsloth.trainer import UnslothVisionDataCollator
+from trl import SFTTrainer, SFTConfig
+
+FastVisionModel.for_training(model)
+trainer = SFTTrainer(
+    model = model,
+    tokenizer = tokenizer,
+    data_collator = UnslothVisionDataCollator(model, tokenizer),
+    train_dataset = converted_dataset,
+    args = SFTConfig(
+        per_device_train_batch_size = 2,
+        gradient_accumulation_steps = 4,
+        warmup_steps = 5,
+        # Hyperparameters arrive from `nawat submit --param ...`, with the
+        # notebook's values as defaults:
+        max_steps     = int(os.environ.get("NAWAT_PARAM_MAX_STEPS", "30")),
+        learning_rate = float(os.environ.get("NAWAT_PARAM_LEARNING_RATE", "2e-4")),
+        logging_steps = 1,
+        optim = "adamw_8bit",
+        weight_decay = 0.001,
+        lr_scheduler_type = "linear",
+        seed = 3407,
+        # Intermediate checkpoints are scratch, not artifacts — keep them out of
+        # NAWAT_OUT_DIR so they are not published:
+        output_dir = tempfile.mkdtemp(prefix = "trainer-"),
+        report_to = "none",
+        remove_unused_columns = False,
+        dataset_text_field = "",
+        dataset_kwargs = {"skip_prepare_dataset": True},
+        max_length = 2048,
+    ),
+)
+trainer.train()
+
+# Everything written under NAWAT_OUT_DIR is published as its own artifact class
+# when the run exits 0 — uploaded, verified file by file, then reclaimed.
+model.save_pretrained(OUT / "adapter")             # ← was "qwen_lora"
+tokenizer.save_pretrained(OUT / "adapter")
+
+# Only on request, for deployment — each becomes runs/<id>/<name>:
+# model.save_pretrained_merged(OUT / "merged", tokenizer)
+# model.save_pretrained_gguf(OUT / "gguf", tokenizer, quantization_method = "q4_k_m")
 ```
 
-Outputs are published only when the command exits 0. A failed run leaves them on disk
-for inspection.
+**Submit it:**
+
+```bash
+nawat submit train_latex_ocr.py \
+  --model   models/unsloth/Qwen3.5-0.8B \
+  --dataset datasets/unsloth/LaTeX_OCR \
+  --param   max_steps=60 --param learning_rate=2e-4 \
+  --notes   "LaTeX OCR baseline"
+```
+
+What happens, in order:
+
+1. **Stage.** Model and dataset resolve from cache → object storage → Hugging Face
+   (first time only; written through to the store so it never happens again).
+   Space is made safely first if the ceiling requires it.
+2. **Hold.** Both inputs are leased to the trainer's own pid — nothing can evict
+   them mid-run, and the lease dies with the process, crash included.
+3. **Train offline.** The subprocess runs with `HF_HUB_OFFLINE=1` forced. The log
+   streams to your terminal (`nawat logs <id> -f` from any other shell).
+4. **Publish.** `runs/<id>/adapter` (and `merged/`, `gguf/` if you saved them) is
+   uploaded, verified by name and size, and the local copy reclaimed. The log and
+   run record go to `runs/<id>/record`. A failed run publishes nothing but keeps
+   both.
+
+**What changed vs. the notebook** — nothing else did:
+
+| Notebook | Under Nawāt |
+| --- | --- |
+| `from_pretrained("unsloth/Qwen3.5-0.8B")` | `from_pretrained(os.environ["NAWAT_MODEL_DIR"])` |
+| `load_dataset("unsloth/LaTeX_OCR")` | `load_dataset(os.environ["NAWAT_DATASET_DIR"])` |
+| `save_pretrained("qwen_lora")` | `save_pretrained(OUT / "adapter")` |
+| `push_to_hub(..., token=...)` | automatic verified publish to your own store |
+| manual `rm -rf` between runs | automatic, refuses when unsafe |
+
+Notebooks submit too (`nawat submit explore.ipynb ...`): the notebook is executed
+with nbconvert and the executed copy is archived as the run record. Adapt the
+load cells to the environment variables first, same as above — the pip-install
+cell is unnecessary on a host with Unsloth already installed.
+
+**Test the adapter — no merge, under two minutes:**
+
+```bash
+nawat serve models/unsloth/Qwen3.5-0.8B          # stages weights, starts vLLM
+nawat adapter runs/<id>/adapter --name latex-ocr # hot-loads onto the running base
+
+curl http://127.0.0.1:8001/v1/chat/completions -d '{
+  "model": "latex-ocr",
+  "messages": [{"role": "user", "content": [
+    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+    {"type": "text", "text": "Write the LaTeX representation for this image."}]}]
+}'
+
+nawat session --stop    # or just walk away: idle teardown releases GPU + disk
+```
+
+A ~200 MB LoRA against a multi-GB base: merging to test would multiply the
+storage cost per experiment by two orders of magnitude. Serving the base once and
+swapping adapters at runtime makes testing effectively free.
 
 ---
 
-## In a notebook
+## In a notebook, interactively
 
 ```python
 import nawat
 
-model = nawat.resolve("models/unsloth/Qwen2.5-VL-7B-Instruct")   # staged, leased
-data  = nawat.resolve("datasets/ocr-arabic-v3")
-...
-nawat.publish(out_dir, "runs/2026-07-28-a91f/adapter")           # uploaded, verified, reclaimed
+model_dir = nawat.resolve("models/unsloth/Qwen3.5-0.8B")   # staged + held
+data_dir  = nawat.resolve("datasets/unsloth/LaTeX_OCR")
+# ... train exactly as above ...
+nawat.publish(out_dir, "runs/2026-07-28-a91f/adapter")     # upload, verify, reclaim
 ```
 
-`resolve` holds the artifact for the lifetime of the kernel process. To scope it
-tighter:
-
-```python
-with nawat.holding("models/base", "datasets/ocr-arabic-v3") as staged:
-    ...
-```
+`resolve` holds the artifact for the lifetime of the kernel; `with
+nawat.holding(...)` scopes it tighter.
 
 ---
 
@@ -188,99 +261,65 @@ with nawat.holding("models/base", "datasets/ocr-arabic-v3") as staged:
 | Command | What it does |
 | --- | --- |
 | `nawat status` | Occupancy against the ceiling, disk, what is held |
-| `nawat ls` | What is on local disk, with flags: `K` kept · `L` in use · `R` in object storage |
+| `nawat ls` | What is on local disk — `K` kept · `L` in use · `R` in object storage |
 | `nawat resolve KEY` | Make it present locally and print the path |
 | `nawat keep KEY` / `release KEY` | Exempt from reclamation, or stop |
 | `nawat free [--need 16GB]` | Reclaim least-recently-used space; `--dry-run` to look first |
 | `nawat publish DIR KEY` | Upload, verify, reclaim |
-| `nawat add DIR KEY` | Adopt a directory already on disk as an artifact |
+| `nawat add DIR KEY` | Adopt a directory already on disk (seed your own datasets) |
 | `nawat verify KEY` | Compare the local copy against its replica |
 | `nawat rm KEY` | Remove one artifact (refuses if unreplicated) |
 | `nawat registry` | What object storage holds, cached or not |
 | `nawat leases` | What is in use, and by whom |
-| `nawat hold ... -- CMD` | Stage, run, publish |
 | `nawat submit SCRIPT ...` | Run a training script as a recorded run |
-| `nawat runs` / `run ID` / `logs ID [-f]` / `cancel ID` | Run history, record, log, stop |
-| `nawat scripts` | Training scripts and notebooks in the workspace |
-| `nawat serve KEY` | Start an inference server for a model |
-| `nawat session [--stop\|--log]` | The running server: inspect, tail, tear down |
-| `nawat adapter KEY [--name N]` | Hot-load a trained adapter, no merge, no restart |
-| `nawat api` | Run the control plane HTTP API |
-| `nawat check` | Bring-up verification |
+| `nawat runs` / `run ID` / `logs ID [-f]` / `cancel ID` | History, record, log, stop |
+| `nawat serve KEY` / `adapter KEY` / `session --stop` | Serve, hot-load, tear down |
+| `nawat api` | The control plane over HTTP (docs at `/docs`) |
+| `nawat check` | Prove this host can store, verify and reclaim |
 | `nawat config` | Configuration in force, credentials redacted |
 
 Exit codes are stable: `2` invalid key, `3` not found, `4` store unavailable,
 `5` verification failed, `6` insufficient space, `7` offline, `8` protected.
 
----
-
-## Serving and the API
-
-```bash
-nawat serve models/unsloth/Qwen2.5-VL-7B-Instruct   # stages weights, starts vLLM
-nawat adapter runs/2026-07-28-a91f/adapter --name ocr-v3
-curl http://127.0.0.1:8001/v1/chat/completions -d '{"model": "ocr-v3", ...}'
-nawat session --stop                                 # or just leave it: idle teardown
-```
-
-Adapters are served, not merged: a ~200 MB LoRA loads onto the running 16 GB base in
-seconds, so testing a fine-tune costs nothing. One session at a time, enforced —
-starting a second model stops the first. The weights are leased to the server's own
-pid, so they cannot be evicted while it runs, even if the control plane restarts.
-An idle session is torn down after `NAWAT_SERVE_IDLE_TIMEOUT` (default 15 min),
-releasing the GPU and reclaiming the disk.
-
-`nawat api` runs the control plane (`NAWAT_API_HOST:NAWAT_API_PORT`, default
-`127.0.0.1:8080`): every command above over HTTP, run submission with a serial FIFO
-queue, server-sent-event log streaming at `/runs/{id}/log/stream`, and a stable
-OpenAI-compatible address at `/v1/...` that forwards to whichever session is current —
-configure a client once and it survives restarts, model changes and idle teardowns.
-Set `NAWAT_API_TOKEN` to require a bearer token (NFR-4.2); `/health` stays open for
-monitoring. Interactive docs at `/docs`.
+`nawat api` serves everything above over HTTP — FIFO run queue, server-sent-event
+log streaming, and a stable OpenAI-compatible `/v1` that forwards to whichever
+inference session is current, so a client configured once survives restarts and
+model changes. `NAWAT_API_TOKEN` enables bearer-token auth; `/health` stays open.
 
 ---
 
-## What is on disk
+## The rule everything follows
 
-```text
-$NAWAT_CACHE_ROOT/
-  models/unsloth/Qwen2.5-VL-7B-Instruct/
-    .nawat-artifact.json          # key, size, file count, fetch time
-    config.json
-    model.safetensors
-  .nawat-staging/                 # in-flight downloads, renamed into place on completion
-  .nawat/
-    nawat.sqlite3                 # artifact record and leases
-    cache.lock
-```
+> Object storage is truth. Local disk is disposable. Verify before deleting,
+> always. If space cannot be freed safely, refuse and say why.
 
-`.nawat-artifact.json` is written into each artifact directory so the cache describes
-itself: delete the database and `nawat status` rebuilds it from disk. It is a dotfile,
-never uploaded, and never counted towards an artifact's size.
-
----
+- Eviction re-verifies the replica **at the moment of deletion** — never from a
+  cached flag. Store unreachable → nothing is deleted; you get a full disk and an
+  explanation, not a gamble.
+- Artifacts in use are held by a **lease keyed to a live process** (boot id, pid,
+  start time), not a timeout: a six-hour run cannot have its weights evicted, and
+  a crashed run cannot deadlock the cache.
+- Downloads land in staging and are renamed into place atomically; an interrupted
+  transfer never looks complete.
+- Each artifact directory carries a `.nawat-artifact.json` marker, so the cache
+  describes itself on disk — delete the state database and it rebuilds.
 
 ## Tests
 
 ```bash
-.venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest
+.venv/bin/pip install -e ".[dev]" && .venv/bin/python -m pytest
 ```
 
-Per PRD §12 the eviction tests are a release gate — `tests/test_eviction.py` asserts
-that unreplicated, kept, in-use and unverifiable artifacts are never removed, and that a
-refusal deletes nothing. `tests/test_store_s3.py` drives the S3 backend over real HTTP
-(list pagination past 1000 keys, parallel multipart, prefix isolation) against an
-in-process endpoint, so the RustFS path is exercised without RustFS running.
+The eviction tests are a release gate: unreplicated, kept, in-use and
+unverifiable artifacts are never removed, and a refusal deletes nothing.
+The S3 backend is driven over real HTTP (pagination past 1000 keys, multipart,
+prefix isolation), and sessions are tested against a real subprocess server —
+no GPU needed to run the suite.
 
----
+## Known limits
 
-## Known limits in Phase 1
-
-- Mutating operations take a host-wide lock, so two simultaneous fetches serialise.
-  Acceptable on a single-GPU host with serial runs; revisit if it bites.
-- An upstream fetch reserves space from the hub's reported size; if that is unavailable
-  the reserve falls back to `NAWAT_MIN_FREE` and the difference is reclaimed after the
-  fetch rather than before it.
-- Verification compares name and size, not content hashes — as specified (NFR-1.2).
-  Checksums would catch silent corruption at the cost of reading every byte back.
+- Mutating cache operations take a host-wide lock; simultaneous stages serialise.
+- Verification compares name and size, not content hashes (as specified) —
+  checksums would catch silent corruption at the cost of reading every byte back.
+- vLLM must support the architecture being served; adapter hot-load requires the
+  vLLM backend.
