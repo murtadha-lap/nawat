@@ -595,6 +595,33 @@ def cmd_adapter(cache: Cache, args) -> int:
     return 0
 
 
+def cmd_eval(cache: Cache, args) -> int:
+    """Evaluate a run's adapter against a held-out set, into its record."""
+    from .evaluate import Evaluator
+
+    evaluator = Evaluator(cache, _run_store(cache), _sessions(cache))
+    _err(f"Evaluating run {args.run_id} — the base model is served if it is not already.")
+
+    def report(done: int, total: int) -> None:
+        if sys.stderr.isatty():
+            _err(f"\r  sample {done}/{total}   ") if done < total else _err(f"\r  sample {done}/{total}")
+
+    result = evaluator.evaluate_run(
+        args.run_id,
+        args.data,
+        base=args.base,
+        file_name=args.file,
+        limit=args.limit,
+        label=args.label,
+        progress=report,
+    )
+    print(f"run {args.run_id} · {result.samples} samples against {Path(args.data).name}")
+    print(f"CER  {result.cer * 100:.2f}%")
+    print(f"WER  {result.wer * 100:.2f}%")
+    print(f"Written into the run record; compare with: {PROGRAM} metrics {args.run_id}")
+    return 0
+
+
 def cmd_lab(cache: Cache, args) -> int:
     """JupyterLab in the workspace, sharing the cache through the environment."""
     config = cache.config
@@ -795,6 +822,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--name", help="what to call it when requesting completions")
     p.add_argument("--unload", metavar="NAME")
     p.set_defaults(run=cmd_adapter)
+
+    p = sub.add_parser("eval", help="score a run's adapter against a held-out set (CER/WER)")
+    p.add_argument("run_id")
+    p.add_argument("--data", required=True, help="a dataset key or a local path holding the eval JSONL")
+    p.add_argument("--file", help="file name inside the dataset (default: eval/test/val.jsonl)")
+    p.add_argument("--base", metavar="KEY", help="base model to serve; defaults to the run's model")
+    p.add_argument("--limit", type=int, help="score only the first N samples")
+    p.add_argument("--label", help="name for this evaluation in the record")
+    p.set_defaults(run=cmd_eval)
 
     p = sub.add_parser("api", help="run the control plane and web interface")
     p.set_defaults(run=cmd_api)

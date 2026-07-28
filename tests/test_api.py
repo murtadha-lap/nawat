@@ -270,6 +270,25 @@ def test_scripts_are_listed_from_the_workspace(client, script):
 # -- sessions over http ------------------------------------------------------
 
 
+def test_evaluation_over_http_returns_the_number_and_stores_it(client, cached, script, tmp_path):
+    cached("models/base", 4096)
+    trainer = TRAINER.replace('m.log(step=2, loss=1.87)', 'm.log(step=2, loss=1.87)')
+    script(trainer)
+    run_id = client.post("/runs", json={"script": "train.py", "model": "models/base"}).json()["id"]
+    wait_for(client, run_id)
+
+    data = tmp_path / "eval.jsonl"
+    data.write_text(json.dumps({"reference": "abcd", "prompt": "ECHO abcd"}) + "\n")
+
+    result = client.post(f"/runs/{run_id}/evaluate", json={"data": str(data)}).json()
+    assert result["cer"] == 0.0 and result["samples"] == 1
+    assert "per_sample" not in result
+
+    listed = client.get(f"/runs/{run_id}/evaluations").json()
+    assert listed[0]["label"] == "eval"
+    client.delete("/sessions")
+
+
 def test_the_openai_route_says_when_nothing_is_serving(client):
     response = client.post("/v1/chat/completions", json={"model": "x", "messages": []})
     assert response.status_code == 404
