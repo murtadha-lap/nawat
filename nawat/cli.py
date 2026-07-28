@@ -34,6 +34,7 @@ PROGRAM = "nawat"
 
 
 def _err(message: str) -> None:
+    sys.stdout.flush()  # keep the two streams in order when either is a pipe
     print(message, file=sys.stderr)
 
 
@@ -343,6 +344,24 @@ def cmd_config(cache: Cache, args) -> int:
     return 0
 
 
+def cmd_check(cache: Cache, args) -> int:
+    """Bring-up check: can this host actually store, verify and reclaim?"""
+    from .health import run_checks
+
+    checks = run_checks(cache, create_bucket=args.create_bucket)
+    width = max(len(check.name) for check in checks)
+    failed = [check for check in checks if not check.ok]
+    for check in checks:
+        print(f"{'ok  ' if check.ok else 'FAIL'}  {check.name.ljust(width)}  {check.detail}")
+        if not check.ok and check.remedy:
+            print(f"        {check.remedy}")
+    if failed:
+        _err(f"\n{len(failed)} of {len(checks)} checks failed. Nawāt will not run correctly until they pass.")
+        return 4
+    print("\nReady. Object storage is reachable and this host can publish, verify and reclaim.")
+    return 0
+
+
 # -- argument parsing ---------------------------------------------------------
 
 
@@ -430,6 +449,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("config", help="the configuration in force, with credentials redacted")
     p.set_defaults(run=cmd_config)
+
+    p = sub.add_parser("check", help="verify this host can store, verify and reclaim")
+    p.add_argument("--create-bucket", action="store_true", help="create the bucket if it is missing")
+    p.set_defaults(run=cmd_check)
 
     return parser
 

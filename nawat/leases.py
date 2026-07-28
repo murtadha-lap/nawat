@@ -136,7 +136,7 @@ class LeaseRegistry:
             return 0
         with self.db.tx() as conn:
             cursor = conn.executemany("DELETE FROM leases WHERE id = ?", ids)
-            return cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else len(ids)
+            return max(cursor.rowcount or 0, 0)
 
     def release_process(self, pid: int | None = None) -> int:
         pid = os.getpid() if pid is None else pid
