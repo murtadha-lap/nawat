@@ -387,6 +387,8 @@ const views = {
               "Cancel run"))
           : el("div", { class: "actions" },
               el("button", { onclick: () => { location.hash = "#compare/" + runId; } }, "Compare"),
+              record.state === "failed"
+                ? el("button", { onclick: () => { location.hash = "#agent/" + runId; } }, "Diagnose") : null,
               record.artifacts.some(a => a.endsWith("/adapter"))
                 ? el("button", { onclick: () => { location.hash = "#serve/" + runId; } }, "Test adapter") : null));
       document.getElementById("run-state")?.replaceChildren(stateSpan(record.state));
@@ -591,6 +593,78 @@ const views = {
     return frame;
   },
 
+  /* Agent — propose, review the diff, apply, resubmit. Never autonomous. */
+  async agent(runId) {
+    const status = await api("/agent");
+    const instruction = el("textarea", { rows: 3, placeholder: runId
+      ? "What should be fixed? The failed run's log and metrics join the context."
+      : "What should be written or changed?" });
+    const scriptIn = el("input", { type: "text", placeholder: "train.py (defaults to the run's script)" });
+    const out = el("div", {});
+    let proposal = null;
+
+    const frame = el("div", {},
+      el("p", { class: "eyebrow" }, "Agent-assisted authoring"),
+      el("h1", {}, "Agent ", runId ? el("small", {}, "diagnosing " + runId) : null),
+      el("section", { class: "panel" },
+        status.configured
+          ? el("p", { class: "muted" }, "Backend: ", el("span", { class: "mono" }, status.backend),
+              ". Proposals are diffs; nothing reaches the workspace without your approval.")
+          : el("p", { class: "empty" }, "No agent backend is configured — the platform works fully without one. ",
+              el("span", { class: "mono" }, status.remedy || "")),
+        el("label", {}, "Instruction"), instruction,
+        el("label", {}, "Script"), scriptIn,
+        el("div", { class: "actions" },
+          el("button", { disabled: !status.configured, onclick: propose }, "Propose")),
+        out));
+    return frame;
+
+    async function propose() {
+      out.replaceChildren(notice("ok", "Asking the agent — this can take a minute…"));
+      try {
+        proposal = await api("/agent/propose", { method: "POST", body: JSON.stringify({
+          instruction: instruction.value.trim(),
+          script: scriptIn.value.trim() || null,
+          run_id: runId || null,
+        }) });
+      } catch (error) { out.replaceChildren(notice("error", error.message)); return; }
+      out.replaceChildren(
+        el("p", { class: "eyebrow", style: "margin-top:24px" }, "Proposal"),
+        el("p", {}, proposal.summary),
+        ...proposal.warnings.map(w => notice("error", "⚠ " + w)),
+        el("pre", { class: "log" }, proposal.diff || "(a new file)"),
+        el("div", { class: "actions" },
+          el("button", { onclick: apply }, "Apply to workspace"),
+          el("button", { class: "quiet", onclick: propose }, "Ask again")));
+    }
+
+    async function apply() {
+      try {
+        const applied = await api("/agent/apply", { method: "POST", body: JSON.stringify({
+          path: proposal.path, content: proposal.new_content,
+          summary: proposal.summary, instruction: instruction.value.trim(), backend: proposal.backend,
+        }) });
+        const actions = el("div", { class: "actions" });
+        if (runId) actions.append(el("button", { onclick: () => resubmit(actions) }, "Resubmit run"));
+        out.append(notice("ok", `Applied and committed as ${applied.commit}.`), actions);
+      } catch (error) { out.append(notice("error", error.message)); }
+    }
+
+    async function resubmit(host) {
+      try {
+        const failed = await api(`/runs/${runId}`);
+        const record = await api("/runs", { method: "POST", body: JSON.stringify({
+          script: proposal.path,
+          model: failed.spec.model,
+          datasets: failed.spec.datasets,
+          params: failed.spec.params,
+          notes: `agent revision of ${runId}`,
+        }) });
+        location.hash = "#run/" + record.id;
+      } catch (error) { host.append(notice("error", error.message)); }
+    }
+  },
+
   /* Compare — previous traces in verdigris beneath the chosen gold. */
   async compare(anchor) {
     const records = (await api("/runs")).filter(r => r.state === "succeeded" || r.state === "failed");
@@ -726,7 +800,7 @@ function meterEl(fraction) {
 
 const NAV = [
   ["storage", "Storage"], ["registry", "Registry"], ["runs", "Runs"],
-  ["submit", "Submit"], ["serve", "Serve"], ["compare", "Compare"],
+  ["submit", "Submit"], ["serve", "Serve"], ["compare", "Compare"], ["agent", "Agent"],
 ];
 
 function renderNav(active) {
