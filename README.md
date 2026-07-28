@@ -8,6 +8,11 @@ Object storage is the source of truth for every model, dataset and run artifact;
 local disk is a disposable cache managed automatically. You write an ordinary
 Unsloth training script, submit it, and never touch a file to make room for it.
 
+All seven PRD phases are built: the storage core, the control plane, metrics, the
+web interface, evaluation, agent-assisted authoring, and hardening. Operational
+procedures live in [docs/OPERATIONS.md](docs/OPERATIONS.md); the control plane
+runs as a systemd service via [deploy/nawat-api.service](deploy/nawat-api.service).
+
 ---
 
 ## The problem
@@ -303,7 +308,12 @@ nawat.holding(...)` scopes it tighter.
 | `nawat runs` / `run ID` / `logs ID [-f]` / `cancel ID` | History, record, log, stop |
 | `nawat metrics ID [-f]` | The metric series as a terminal trace, or streamed live |
 | `nawat serve KEY` / `adapter KEY` / `session --stop` | Serve, hot-load, tear down |
-| `nawat api` | The control plane over HTTP (docs at `/docs`) |
+| `nawat eval ID --data KEY` | Score a run's adapter — CER/WER into its record |
+| `nawat agent "…" [--run ID]` | Propose a script change; diff + approval, never autonomous |
+| `nawat describe ID` | Store a plain-language account of a run in its record |
+| `nawat estimate --model KEY` | Will it fit? VRAM estimate before spending GPU hours |
+| `nawat shard DIR KEY` | Pack a small-file corpus into streamable tar shards |
+| `nawat api` | The control plane and web UI over HTTP (docs at `/docs`) |
 | `nawat check` | Prove this host can store, verify and reclaim |
 | `nawat config` | Configuration in force, credentials redacted |
 
@@ -314,6 +324,21 @@ Exit codes are stable: `2` invalid key, `3` not found, `4` store unavailable,
 log streaming, and a stable OpenAI-compatible `/v1` that forwards to whichever
 inference session is current, so a client configured once survives restarts and
 model changes. `NAWAT_API_TOKEN` enables bearer-token auth; `/health` stays open.
+
+---
+
+## The interface and the agent
+
+`nawat api` serves a benchtop-instrument web UI at `/ui` — storage, registry, runs
+with a live gold-on-graticule loss trace, submission, serving with chat and image
+input, cross-run comparison, and an Agent view. A failed run's **Diagnose** button
+leads to propose → review diff → apply → resubmit, all on one screen.
+
+The agent is optional and never autonomous (`NAWAT_AGENT_BACKEND=claude` for the
+Claude Agent SDK — confined read-only to the workspace — or `local` for any
+OpenAI-compatible endpoint, fully on-premises). Every proposal passes a syntax
+gate and a VRAM estimate before it is even offered, and reaches the workspace
+only through your approval, committed to git with its prompt and backend.
 
 ---
 

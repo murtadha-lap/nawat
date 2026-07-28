@@ -748,6 +748,35 @@ def cmd_api(cache: Cache, args) -> int:
     return 0
 
 
+def cmd_shard(cache: Cache, args) -> int:
+    """Pack a small-file corpus into tar shards and publish it as a dataset."""
+    import tempfile
+
+    from . import shards
+
+    source = Path(args.directory).expanduser()
+    shard_size = parse_size(args.shard_size)
+
+    def report(done: int, total: int) -> None:
+        if sys.stderr.isatty() and (done % 500 == 0 or done == total):
+            _err(f"\r  packed {done}/{total} files   ")
+
+    with tempfile.TemporaryDirectory(dir=str(cache.config.staging_root)) as scratch:
+        dest = Path(scratch) / "sharded"
+        index = shards.pack(source, dest, shard_size=shard_size, progress=report)
+        shards.verify(dest)
+        print(f"{index.total_files} files → {len(index.shards)} shard(s), {human_bytes(index.total_bytes)} of content.")
+        if args.no_publish:
+            final = source.parent / (source.name + "-sharded")
+            dest.rename(final)
+            print(f"Written to {final}; publish later with: {PROGRAM} add {final} datasets/<name>")
+            return 0
+        status = cache.add(dest, args.key)
+        print(f"Published as {status.key} ({human_bytes(status.bytes)}), verified in object storage.")
+    print("Stream it in training with webdataset or datasets over the shard-*.tar files.")
+    return 0
+
+
 def cmd_config(cache: Cache, args) -> int:
     print(json.dumps(cache.config.redacted(), indent=2))
     return 0
@@ -960,6 +989,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("lab", help="JupyterLab in the workspace, sharing the cache")
     p.add_argument("--port", type=int)
     p.set_defaults(run=cmd_lab)
+
+    p = sub.add_parser("shard", help="pack a small-file corpus into tar shards and publish it")
+    p.add_argument("directory", help="the corpus to shard")
+    p.add_argument("key", help="dataset key to publish under, e.g. datasets/ocr-arabic-v3-sharded")
+    p.add_argument("--shard-size", default="512MB")
+    p.add_argument("--no-publish", action="store_true", help="write the shards beside the source instead")
+    p.set_defaults(run=cmd_shard)
 
     p = sub.add_parser("config", help="the configuration in force, with credentials redacted")
     p.set_defaults(run=cmd_config)
