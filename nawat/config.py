@@ -19,7 +19,7 @@ from .dotenv import load as load_dotenv
 from .errors import NotFound
 from .units import parse_size
 
-_SECRET_FIELDS = frozenset({"access_key", "secret_key", "hub_token"})
+_SECRET_FIELDS = frozenset({"access_key", "secret_key", "hub_token", "api_token"})
 
 #: Distinguishes "discover a .env" from "use no .env at all" (None).
 UNSET = object()
@@ -99,6 +99,19 @@ class Config:
     multipart_threshold: int = 64 * 10**6
     multipart_chunk: int = 32 * 10**6
 
+    #: The control-plane API. Bound to the local network only; external exposure
+    #: is a separately configured reverse proxy (NFR-4.3).
+    api_host: str = "127.0.0.1"
+    api_port: int = 8080
+    api_token: str | None = field(default=None, repr=False)
+
+    #: The inference server this session manager supervises.
+    serve_port: int = 8001
+    serve_idle_timeout: float = 900.0
+    serve_startup_timeout: float = 600.0
+    serve_backend: str = "vllm"
+    serve_extra_args: str = ""
+
     #: The .env these values were layered from, if any. Recorded so the CLI can
     #: show which file is in force — misconfiguration is usually the wrong file.
     env_file: Path | None = None
@@ -129,6 +142,14 @@ class Config:
             transfer_workers=int(env.get("NAWAT_TRANSFER_WORKERS", "8")),
             multipart_threshold=parse_size(env.get("NAWAT_MULTIPART_THRESHOLD", "64MB")),
             multipart_chunk=parse_size(env.get("NAWAT_MULTIPART_CHUNK", "32MB")),
+            api_host=env.get("NAWAT_API_HOST", "127.0.0.1"),
+            api_port=int(env.get("NAWAT_API_PORT", "8080")),
+            api_token=env.get("NAWAT_API_TOKEN") or None,
+            serve_port=int(env.get("NAWAT_SERVE_PORT", "8001")),
+            serve_idle_timeout=float(env.get("NAWAT_SERVE_IDLE_TIMEOUT", "900")),
+            serve_startup_timeout=float(env.get("NAWAT_SERVE_STARTUP_TIMEOUT", "600")),
+            serve_backend=env.get("NAWAT_SERVE_BACKEND", "vllm").strip().lower(),
+            serve_extra_args=env.get("NAWAT_SERVE_EXTRA_ARGS", ""),
             env_file=loaded,
         )
 
