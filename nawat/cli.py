@@ -595,6 +595,21 @@ def cmd_adapter(cache: Cache, args) -> int:
     return 0
 
 
+def cmd_lab(cache: Cache, args) -> int:
+    """JupyterLab in the workspace, sharing the cache through the environment."""
+    config = cache.config
+    config.workspace_root.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, "-m", "jupyterlab", "--notebook-dir", str(config.workspace_root)]
+    if args.port:
+        command += ["--port", str(args.port)]
+    try:
+        completed = subprocess.run(command)
+    except FileNotFoundError:
+        _err("JupyterLab is not installed. Install it with: pip install jupyterlab")
+        return 1
+    return completed.returncode
+
+
 def cmd_api(cache: Cache, args) -> int:
     try:
         from .api import serve as serve_api
@@ -781,8 +796,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--unload", metavar="NAME")
     p.set_defaults(run=cmd_adapter)
 
-    p = sub.add_parser("api", help="run the control plane")
+    p = sub.add_parser("api", help="run the control plane and web interface")
     p.set_defaults(run=cmd_api)
+
+    p = sub.add_parser("lab", help="JupyterLab in the workspace, sharing the cache")
+    p.add_argument("--port", type=int)
+    p.set_defaults(run=cmd_lab)
 
     p = sub.add_parser("config", help="the configuration in force, with credentials redacted")
     p.set_defaults(run=cmd_config)
