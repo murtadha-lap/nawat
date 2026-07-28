@@ -549,9 +549,10 @@ class Cache:
             held.append(f"{key} ({size}) — {reason}")
         leading = result.skipped[0] if result.skipped else None
         if leading is not None:
-            status = self.get(leading[0])
+            key, reason = leading
+            status = self.get(key)
             size = human_bytes(status.bytes) if status else "unknown size"
-            remedy = f"{size} is held by {leading[1]} — release it, or raise the ceiling in Settings."
+            remedy = f"{key} ({size}) is {reason} — release it, or raise the ceiling in Settings."
         else:
             remedy = "Nothing on disk can be freed — raise the ceiling in Settings."
         raise InsufficientSpace(
