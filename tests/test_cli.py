@@ -24,6 +24,8 @@ def shell(tmp_path, monkeypatch):
         "NAWAT_CACHE_CEILING": "10000",
         "NAWAT_MIN_FREE": "0",
         "NAWAT_OFFLINE": "1",
+        # This repo has its own .env; keep it out of the tests.
+        "NAWAT_ENV_FILE": "",
     }
     for key, value in env.items():
         monkeypatch.setenv(key, value)

@@ -14,9 +14,15 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Mapping
 
+from .dotenv import find as find_dotenv
+from .dotenv import load as load_dotenv
+from .errors import NotFound
 from .units import parse_size
 
 _SECRET_FIELDS = frozenset({"access_key", "secret_key", "hub_token"})
+
+#: Distinguishes "discover a .env" from "use no .env at all" (None).
+UNSET = object()
 
 DEFAULT_CACHE_ROOT = "~/nawat/cache"
 DEFAULT_WORKSPACE = "~/nawat/workspace"
@@ -29,6 +35,37 @@ def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     if raw is None or raw == "":
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _merge_dotenv(base: Mapping[str, str], env_file) -> tuple[Mapping[str, str], Path | None]:
+    """Layer a .env underneath the real environment, which always wins.
+
+    ``NAWAT_ENV_FILE`` names a file explicitly; set it empty to use none. With
+    it unset, the nearest .env above the working directory is used if there is
+    one, and its absence is not an error.
+    """
+    if env_file is None:
+        return base, None
+    if env_file is UNSET:
+        named = base.get("NAWAT_ENV_FILE")
+        if named is not None:
+            if named.strip() == "":
+                return base, None
+            path = Path(named).expanduser()
+            if not path.is_file():
+                raise NotFound(
+                    f"NAWAT_ENV_FILE points at {path}, which does not exist.",
+                    "Correct the path, or unset NAWAT_ENV_FILE to use the nearest .env.",
+                )
+        else:
+            path = find_dotenv()
+            if path is None:
+                return base, None
+    else:
+        path = Path(env_file).expanduser()
+        if not path.is_file():
+            raise NotFound(f"{path} does not exist.", "Check the --env-file path.")
+    return {**load_dotenv(path), **base}, path.resolve()
 
 
 @dataclass(frozen=True)
@@ -62,9 +99,14 @@ class Config:
     multipart_threshold: int = 64 * 10**6
     multipart_chunk: int = 32 * 10**6
 
+    #: The .env these values were layered from, if any. Recorded so the CLI can
+    #: show which file is in force — misconfiguration is usually the wrong file.
+    env_file: Path | None = None
+
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> "Config":
+    def from_env(cls, env: Mapping[str, str] | None = None, *, env_file=UNSET) -> "Config":
         env = os.environ if env is None else env
+        env, loaded = _merge_dotenv(env, env_file)
         cache_root = Path(env.get("NAWAT_CACHE_ROOT", DEFAULT_CACHE_ROOT)).expanduser().resolve()
         state_dir = Path(env.get("NAWAT_STATE_DIR", str(cache_root / ".nawat"))).expanduser().resolve()
         local_store = env.get("NAWAT_LOCAL_STORE_ROOT")
@@ -87,6 +129,7 @@ class Config:
             transfer_workers=int(env.get("NAWAT_TRANSFER_WORKERS", "8")),
             multipart_threshold=parse_size(env.get("NAWAT_MULTIPART_THRESHOLD", "64MB")),
             multipart_chunk=parse_size(env.get("NAWAT_MULTIPART_CHUNK", "32MB")),
+            env_file=loaded,
         )
 
     @property
