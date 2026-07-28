@@ -51,8 +51,15 @@ Defaults: S3 API on `:9000`, console on `:9001`, data under `/data/rustfs0`. Poi
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e .
 cp .env.example .env && $EDITOR .env  # endpoint, bucket, credentials, cache ceiling
-set -a && . ./.env && set +a
 ```
+
+`nawat` reads `.env` on its own — the nearest one at or above the working
+directory, the way git finds its root — so there is nothing to source and nothing
+to re-export in a new shell. Real environment variables still win over the file,
+so `NAWAT_CACHE_CEILING=40GB nawat free` overrides for one command. Use
+`--env-file PATH` to point elsewhere, or `--no-env-file` to ignore it entirely.
+`nawat check` prints which file is in force, because misconfiguration is usually
+the wrong file rather than the wrong value.
 
 ### 3. Confirm
 
@@ -65,6 +72,7 @@ object, because reachable credentials that cannot delete still cannot run this
 platform.
 
 ```
+ok    configuration              /home/lap/lap/tr/.env
 ok    cache root                 /home/lap/nawat/cache
 ok    state directory            /home/lap/nawat/cache/.nawat
 ok    state database             /home/lap/nawat/cache/.nawat/nawat.sqlite3

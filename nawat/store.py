@@ -369,9 +369,11 @@ def build_store(config: Config) -> ObjectStore:
             "Set NAWAT_STORE_BACKEND to s3 or local.",
         )
     if not config.endpoint and not config.access_key:
+        where = f"{config.env_file} does not set them" if config.env_file else "no .env was found"
         raise StoreUnavailable(
-            "No object-storage endpoint or credentials are configured.",
-            "Set NAWAT_S3_ENDPOINT and the S3 credentials, or NAWAT_STORE_BACKEND=local for a local tree.",
+            f"No object-storage endpoint or credentials are configured — {where}.",
+            "Set NAWAT_S3_ENDPOINT and the S3 credentials in .env beside the project,"
+            " or point at one with --env-file.",
         )
     return S3ObjectStore(config)
 

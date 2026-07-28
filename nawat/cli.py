@@ -22,7 +22,7 @@ import uuid
 from pathlib import Path
 
 from .cache import Cache, open_cache
-from .config import Config
+from .config import UNSET, Config
 from .errors import NawatError
 from .keys import KINDS, Key
 from .units import bar, human_age, human_bytes, parse_size
@@ -350,6 +350,8 @@ def cmd_check(cache: Cache, args) -> int:
 
     checks = run_checks(cache, create_bucket=args.create_bucket)
     width = max(len(check.name) for check in checks)
+    source = cache.config.env_file or "the environment alone — no .env was found"
+    print(f"{'ok  '}  {'configuration'.ljust(width)}  {source}")
     failed = [check for check in checks if not check.ok]
     for check in checks:
         print(f"{'ok  ' if check.ok else 'FAIL'}  {check.name.ljust(width)}  {check.detail}")
@@ -372,6 +374,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--cache-root", help="override NAWAT_CACHE_ROOT")
     parser.add_argument("--ceiling", help="override NAWAT_CACHE_CEILING, e.g. 80GB")
+    parser.add_argument("--env-file", metavar="PATH", help="read configuration from this file instead of the nearest .env")
+    parser.add_argument("--no-env-file", action="store_true", help="use the environment alone, ignoring any .env")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("status", help="cache occupancy against the ceiling")
@@ -463,7 +467,13 @@ def _config_from(args) -> Config:
         overrides["NAWAT_CACHE_ROOT"] = args.cache_root
     if args.ceiling:
         overrides["NAWAT_CACHE_CEILING"] = args.ceiling
-    return Config.from_env({**os.environ, **overrides})
+    if args.no_env_file:
+        env_file = None
+    elif args.env_file:
+        env_file = args.env_file
+    else:
+        env_file = UNSET
+    return Config.from_env({**os.environ, **overrides}, env_file=env_file)
 
 
 def main(argv: list[str] | None = None) -> int:
