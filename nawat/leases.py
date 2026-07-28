@@ -21,9 +21,11 @@ from typing import Iterable, Sequence
 
 from .db import Database
 from .keys import Key
+from .process import UNKNOWN_START as _UNKNOWN_START
+from .process import process_alive as _pid_exists
+from .process import process_start_time
 
 _BOOT_ID_PATHS = ("/proc/sys/kernel/random/boot_id",)
-_UNKNOWN_START = -1.0
 
 
 def boot_id() -> str:
@@ -40,33 +42,6 @@ def boot_id() -> str:
         return f"boottime-{int(psutil.boot_time())}"
     except Exception:
         return "unknown-boot"
-
-
-def process_start_time(pid: int) -> float | None:
-    """Start time of ``pid`` in clock ticks since boot, or None if it is gone."""
-    try:
-        stat = Path(f"/proc/{pid}/stat").read_text()
-    except OSError:
-        return None
-    # The comm field is parenthesised and may itself contain spaces and parens,
-    # so fields are counted from the last ')'.
-    try:
-        tail = stat[stat.rindex(")") + 2 :].split()
-        return float(tail[19])  # field 22 overall: starttime
-    except (ValueError, IndexError):
-        return _UNKNOWN_START
-
-
-def _pid_exists(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
 
 
 @dataclass(frozen=True)

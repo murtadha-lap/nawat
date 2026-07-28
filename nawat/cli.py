@@ -17,6 +17,7 @@ import os
 import shlex
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -25,6 +26,7 @@ from .cache import Cache, open_cache
 from .config import UNSET, Config
 from .errors import NawatError
 from .keys import KINDS, Key
+from .runs import RunSpec, RunState, RunStore
 from .units import bar, human_age, human_bytes, parse_size
 
 PROGRAM = "nawat"
@@ -339,6 +341,227 @@ def cmd_hold(cache: Cache, args) -> int:
     return 0
 
 
+# -- runs ---------------------------------------------------------------------
+
+
+def _run_store(cache: Cache) -> RunStore:
+    return RunStore(cache.db, cache.config.state_dir / "runs")
+
+
+def _executor(cache: Cache):
+    from .executor import Executor
+
+    return Executor(cache, _run_store(cache))
+
+
+def _parse_params(pairs: list[str]) -> dict[str, str]:
+    params: dict[str, str] = {}
+    for pair in pairs:
+        if "=" not in pair:
+            raise NawatError(f"{pair!r} is not a parameter.", "Write parameters as name=value.")
+        name, value = pair.split("=", 1)
+        params[name.strip()] = value.strip()
+    return params
+
+
+def cmd_submit(cache: Cache, args) -> int:
+    executor = _executor(cache)
+    spec = RunSpec(
+        script=args.script,
+        model=Key.parse(args.model) if args.model else None,
+        datasets=tuple(Key.parse(k) for k in args.dataset),
+        inputs=tuple(Key.parse(k) for k in args.input),
+        params=_parse_params(args.param),
+        notes=args.notes or "",
+    )
+    executor.validate(spec)
+    record = executor.runs.create(spec, args.run_id)
+
+    if args.queue:
+        print(f"Queued run {record.id}. It starts when the control plane reaches it.")
+        return 0
+
+    _err(f"run {record.id}  {spec.script}")
+    finished: list = []
+    worker = threading.Thread(target=lambda: finished.append(executor.execute(record.id)), daemon=True)
+    worker.start()
+    for chunk in executor.runs.follow_log(record.id):
+        sys.stdout.write(chunk)
+        sys.stdout.flush()
+    worker.join()
+
+    final = executor.runs.get(record.id)
+    print(f"\nrun {final.id} {final.state.value} in {human_age(final.duration or 0)}")
+    for key in final.artifacts:
+        print(f"  published  {key}")
+    if final.error:
+        _err(final.error)
+    return 0 if final.state is RunState.SUCCEEDED else 1
+
+
+def cmd_runs(cache: Cache, args) -> int:
+    runs = _run_store(cache)
+    records = runs.list(state=RunState(args.state) if args.state else None, limit=args.limit)
+    if args.json:
+        print(json.dumps([r.to_json() for r in records], indent=2))
+        return 0
+    if not records:
+        print("No runs yet.")
+        print(f"Submit one with: {PROGRAM} submit train.py --model models/<repo> --dataset datasets/<name>")
+        return 0
+    now = time.time()
+    rows = [
+        [
+            r.id,
+            r.state.value,
+            r.spec.script,
+            str(r.spec.model or ""),
+            human_age(now - r.submitted_at),
+            human_age(r.duration) if r.duration else "",
+            str(len(r.artifacts)),
+        ]
+        for r in records
+    ]
+    _table(["run", "state", "script", "model", "age", "took", "artifacts"], rows, right={4, 5, 6})
+    return 0
+
+
+def cmd_run(cache: Cache, args) -> int:
+    record = _run_store(cache).get(args.run_id)
+    if args.json:
+        print(json.dumps(record.to_json(), indent=2))
+        return 0
+    print(f"run        {record.id}")
+    print(f"state      {record.state.value}" + (f" (exit {record.exit_code})" if record.exit_code is not None else ""))
+    print(f"script     {record.spec.script}")
+    if record.spec.model:
+        print(f"model      {record.spec.model}")
+    for key in record.spec.datasets:
+        print(f"dataset    {key}")
+    for name, value in record.spec.params.items():
+        print(f"param      {name}={value}")
+    if record.duration:
+        print(f"took       {human_age(record.duration)}")
+    for key in record.artifacts:
+        print(f"artifact   {key}")
+    if record.error:
+        print(f"error      {record.error}")
+    return 0
+
+
+def cmd_logs(cache: Cache, args) -> int:
+    runs = _run_store(cache)
+    runs.get(args.run_id)
+    if args.follow:
+        for chunk in runs.follow_log(args.run_id):
+            sys.stdout.write(chunk)
+            sys.stdout.flush()
+        return 0
+    sys.stdout.write(runs.read_log(args.run_id, tail=args.tail))
+    return 0
+
+
+def cmd_cancel(cache: Cache, args) -> int:
+    record = _executor(cache).cancel(args.run_id)
+    print(f"run {record.id} {record.state.value}.")
+    return 0
+
+
+def cmd_scripts(cache: Cache, args) -> int:
+    root = cache.config.workspace_root
+    if not root.is_dir():
+        print(f"The workspace {root} does not exist yet.")
+        print("Create it and put a training script there, or set NAWAT_WORKSPACE.")
+        return 0
+    found = sorted(
+        path
+        for path in root.rglob("*")
+        if path.suffix in (".py", ".ipynb")
+        and not any(part.startswith((".", "__")) for part in path.relative_to(root).parts)
+    )
+    if not found:
+        print(f"No scripts or notebooks under {root}.")
+        return 0
+    rows = [[str(p.relative_to(root)), "notebook" if p.suffix == ".ipynb" else "script"] for p in found]
+    _table(["script", "kind"], rows)
+    return 0
+
+
+# -- serving ------------------------------------------------------------------
+
+
+def _sessions(cache: Cache):
+    from .sessions import SessionManager
+
+    return SessionManager(cache, runs=_run_store(cache))
+
+
+def cmd_serve(cache: Cache, args) -> int:
+    manager = _sessions(cache)
+    _err(f"Starting an inference server for {args.key} — this takes a minute for a large base.")
+    session = manager.start(args.key, idle_timeout=args.idle_timeout, wait=not args.no_wait)
+    print(f"Serving {session.model} at {session.base_url}/v1 ({session.state.value}).")
+    print(f"Idle timeout {human_age(session.idle_timeout)}; the GPU is released after that.")
+    return 0
+
+
+def cmd_session(cache: Cache, args) -> int:
+    manager = _sessions(cache)
+    if args.stop:
+        stopped = manager.stop()
+        print(f"Stopped {stopped.model}; GPU released." if stopped else "Nothing was running.")
+        return 0
+    if args.log:
+        sys.stdout.write(manager.log(tail=args.tail))
+        return 0
+    session = manager.current()
+    if session is None:
+        print("No inference server is running.")
+        print(f"Start one with: {PROGRAM} serve models/<repo>")
+        return 0
+    if args.json:
+        print(json.dumps(session.to_json(), indent=2))
+        return 0
+    print(f"model      {session.model}")
+    print(f"state      {session.state.value}")
+    print(f"url        {session.base_url}/v1")
+    print(f"pid        {session.pid}")
+    print(f"idle for   {human_age(session.idle_for)} of {human_age(session.idle_timeout)}")
+    for name, key in session.adapters.items():
+        print(f"adapter    {name} -> {key}")
+    return 0
+
+
+def cmd_adapter(cache: Cache, args) -> int:
+    manager = _sessions(cache)
+    if args.unload:
+        session = manager.unload_adapter(args.unload)
+        print(f"Unloaded {args.unload}.")
+        return 0
+    if not args.key:
+        _err(f"Name an adapter to load, or --unload one. Try: {PROGRAM} adapter runs/<id>/adapter")
+        return 2
+    session = manager.load_adapter(args.key, args.name)
+    loaded = args.name or Key.parse(args.key).path.replace("/", "-")
+    print(f"Loaded {args.key} as {loaded}; no merge, no restart.")
+    print(f"Use it by setting model={loaded} against {session.base_url}/v1.")
+    return 0
+
+
+def cmd_api(cache: Cache, args) -> int:
+    try:
+        from .api import serve as serve_api
+    except ImportError as exc:
+        _err(f"The control plane needs its extra: pip install -e '.[api]'  ({exc})")
+        return 1
+    config = cache.config
+    _err(f"Nawāt control plane on http://{config.api_host}:{config.api_port}")
+    if not config.api_token:
+        _err("No NAWAT_API_TOKEN is set, so the API is unauthenticated. Bind it to the loopback only.")
+    serve_api(config)
+    return 0
+
+
 def cmd_config(cache: Cache, args) -> int:
     print(json.dumps(cache.config.redacted(), indent=2))
     return 0
@@ -450,6 +673,63 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keep-outputs", action="store_true", help="keep outputs on disk after publishing")
     p.add_argument("command", nargs=argparse.REMAINDER, help="-- followed by the command to run")
     p.set_defaults(run=cmd_hold)
+
+    p = sub.add_parser("submit", help="run a training script: stage, execute, publish")
+    p.add_argument("script", help="a .py or .ipynb inside the workspace")
+    p.add_argument("--model", metavar="KEY")
+    p.add_argument("--dataset", action="append", default=[], metavar="KEY")
+    p.add_argument("--input", action="append", default=[], metavar="KEY")
+    p.add_argument("--param", action="append", default=[], metavar="NAME=VALUE")
+    p.add_argument("--notes", help="why this run exists")
+    p.add_argument("--run-id", help="identify this run; generated if omitted")
+    p.add_argument("--queue", action="store_true", help="enqueue for the control plane instead of running here")
+    p.set_defaults(run=cmd_submit)
+
+    p = sub.add_parser("runs", help="run history")
+    p.add_argument("--state", choices=[s.value for s in RunState])
+    p.add_argument("--limit", type=int, default=50)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_runs)
+
+    p = sub.add_parser("run", help="everything recorded about one run")
+    p.add_argument("run_id")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_run)
+
+    p = sub.add_parser("logs", help="a run's log")
+    p.add_argument("run_id")
+    p.add_argument("-f", "--follow", action="store_true", help="stream until the run ends")
+    p.add_argument("--tail", type=int, help="only the last N lines")
+    p.set_defaults(run=cmd_logs)
+
+    p = sub.add_parser("cancel", help="stop a run and release what it holds")
+    p.add_argument("run_id")
+    p.set_defaults(run=cmd_cancel)
+
+    p = sub.add_parser("scripts", help="training scripts and notebooks in the workspace")
+    p.set_defaults(run=cmd_scripts)
+
+    p = sub.add_parser("serve", help="start an inference server for a model")
+    p.add_argument("key")
+    p.add_argument("--idle-timeout", type=float, help="seconds of inactivity before the GPU is released")
+    p.add_argument("--no-wait", action="store_true", help="return before the server is ready")
+    p.set_defaults(run=cmd_serve)
+
+    p = sub.add_parser("session", help="the running inference server")
+    p.add_argument("--stop", action="store_true", help="tear it down and release the GPU")
+    p.add_argument("--log", action="store_true")
+    p.add_argument("--tail", type=int, default=200)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_session)
+
+    p = sub.add_parser("adapter", help="load a trained adapter onto the running base, without merging")
+    p.add_argument("key", nargs="?")
+    p.add_argument("--name", help="what to call it when requesting completions")
+    p.add_argument("--unload", metavar="NAME")
+    p.set_defaults(run=cmd_adapter)
+
+    p = sub.add_parser("api", help="run the control plane")
+    p.set_defaults(run=cmd_api)
 
     p = sub.add_parser("config", help="the configuration in force, with credentials redacted")
     p.set_defaults(run=cmd_config)

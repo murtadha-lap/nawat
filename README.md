@@ -2,12 +2,14 @@
 
 Self-hosted fine-tuning and serving platform for storage-constrained GPU hosts.
 
-**Phase 1 — storage core.** Local disk is a disposable cache over an S3-compatible
-object store (RustFS), managed automatically. Nothing is deleted until it has been
-verified present in the store, at the moment of deletion.
+**Built: Phases 1–2.** The storage core — local disk as a disposable cache over an
+S3-compatible object store (RustFS), where nothing is deleted until verified present
+in the store at the moment of deletion — and the control plane: run submission and
+execution, durable run records, streaming logs, inference sessions with adapter
+hot-loading and idle teardown, and an HTTP API covering all of it.
 
-Phases 2–7 (control plane, metrics, web interface, evaluation, agent authoring,
-hardening) are not built yet; see `nawat-prd.md` §11.
+Phases 3–7 (metrics, web interface, evaluation, agent authoring, hardening) are not
+built yet; see `nawat-prd.md` §11.
 
 ---
 
@@ -71,7 +73,7 @@ This does not ping the endpoint — it writes, lists, verifies and deletes a pro
 object, because reachable credentials that cannot delete still cannot run this
 platform.
 
-```
+```text
 ok    configuration              /home/lap/lap/tr/.env
 ok    cache root                 /home/lap/nawat/cache
 ok    state directory            /home/lap/nawat/cache/.nawat
@@ -89,7 +91,7 @@ Ready. Object storage is reachable and this host can publish, verify and reclaim
 
 One name for a thing, mapping 1:1 onto an object-storage prefix and a local path.
 
-```
+```text
 models/unsloth/Qwen2.5-VL-7B-Instruct
 datasets/ocr-arabic-v3
 runs/2026-07-28-a91f/adapter
@@ -105,24 +107,41 @@ resolution — including after eviction — comes from the store.
 
 ## Running an experiment from the shell
 
+Put a training script in the workspace (`NAWAT_WORKSPACE`), then:
+
 ```bash
-nawat hold \
+nawat submit train.py \
   --model   models/unsloth/Qwen2.5-VL-7B-Instruct \
   --dataset datasets/ocr-arabic-v3 \
-  --out     runs/2026-07-28-a91f/adapter \
-  -- python train.py
+  --param   learning_rate=2e-4 --param max_steps=600
 ```
 
 That single command stages the inputs from object storage (evicting whatever it must,
-safely, to make room), holds them under lease for the lifetime of the trainer, runs it,
-then uploads the outputs, verifies them file by file, and reclaims the local copy.
-Nothing is deleted by hand at any point.
+safely, to make room), holds them under lease for the lifetime of the trainer, runs it
+with hub access disabled, streams its log to your terminal, then uploads every artifact
+class it produced (`adapter/`, `gguf/`, …) under `runs/<id>/…`, verifies each file by
+name and size, and reclaims the local copy. Nothing is deleted by hand at any point.
+
+The run is offline by construction: an input that was not declared fails immediately
+instead of silently downloading. A failed run publishes nothing but keeps its record
+and its log — locally and in object storage — for diagnosis.
+
+Afterwards:
+
+```bash
+nawat runs                 # history
+nawat run <id>             # everything recorded about one run
+nawat logs <id> [-f]       # its log, or follow it live
+nawat cancel <id>          # stop it and release what it holds
+```
+
+`nawat hold ... -- CMD` remains for ad-hoc commands that are not run records.
 
 The script receives its configuration through the environment, so it runs unmodified
 outside the platform:
 
 | Variable | Meaning |
-|---|---|
+| --- | --- |
 | `NAWAT_RUN_ID` | Identifier for this run |
 | `NAWAT_OUT_DIR` | Where to write artifacts |
 | `NAWAT_MODEL_DIR` | Staged base model |
@@ -167,7 +186,7 @@ with nawat.holding("models/base", "datasets/ocr-arabic-v3") as staged:
 ## Commands
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `nawat status` | Occupancy against the ceiling, disk, what is held |
 | `nawat ls` | What is on local disk, with flags: `K` kept · `L` in use · `R` in object storage |
 | `nawat resolve KEY` | Make it present locally and print the path |
@@ -180,6 +199,13 @@ with nawat.holding("models/base", "datasets/ocr-arabic-v3") as staged:
 | `nawat registry` | What object storage holds, cached or not |
 | `nawat leases` | What is in use, and by whom |
 | `nawat hold ... -- CMD` | Stage, run, publish |
+| `nawat submit SCRIPT ...` | Run a training script as a recorded run |
+| `nawat runs` / `run ID` / `logs ID [-f]` / `cancel ID` | Run history, record, log, stop |
+| `nawat scripts` | Training scripts and notebooks in the workspace |
+| `nawat serve KEY` | Start an inference server for a model |
+| `nawat session [--stop\|--log]` | The running server: inspect, tail, tear down |
+| `nawat adapter KEY [--name N]` | Hot-load a trained adapter, no merge, no restart |
+| `nawat api` | Run the control plane HTTP API |
 | `nawat check` | Bring-up verification |
 | `nawat config` | Configuration in force, credentials redacted |
 
@@ -188,9 +214,35 @@ Exit codes are stable: `2` invalid key, `3` not found, `4` store unavailable,
 
 ---
 
+## Serving and the API
+
+```bash
+nawat serve models/unsloth/Qwen2.5-VL-7B-Instruct   # stages weights, starts vLLM
+nawat adapter runs/2026-07-28-a91f/adapter --name ocr-v3
+curl http://127.0.0.1:8001/v1/chat/completions -d '{"model": "ocr-v3", ...}'
+nawat session --stop                                 # or just leave it: idle teardown
+```
+
+Adapters are served, not merged: a ~200 MB LoRA loads onto the running 16 GB base in
+seconds, so testing a fine-tune costs nothing. One session at a time, enforced —
+starting a second model stops the first. The weights are leased to the server's own
+pid, so they cannot be evicted while it runs, even if the control plane restarts.
+An idle session is torn down after `NAWAT_SERVE_IDLE_TIMEOUT` (default 15 min),
+releasing the GPU and reclaiming the disk.
+
+`nawat api` runs the control plane (`NAWAT_API_HOST:NAWAT_API_PORT`, default
+`127.0.0.1:8080`): every command above over HTTP, run submission with a serial FIFO
+queue, server-sent-event log streaming at `/runs/{id}/log/stream`, and a stable
+OpenAI-compatible address at `/v1/...` that forwards to whichever session is current —
+configure a client once and it survives restarts, model changes and idle teardowns.
+Set `NAWAT_API_TOKEN` to require a bearer token (NFR-4.2); `/health` stays open for
+monitoring. Interactive docs at `/docs`.
+
+---
+
 ## What is on disk
 
-```
+```text
 $NAWAT_CACHE_ROOT/
   models/unsloth/Qwen2.5-VL-7B-Instruct/
     .nawat-artifact.json          # key, size, file count, fetch time

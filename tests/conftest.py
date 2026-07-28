@@ -61,12 +61,14 @@ class UnavailableStore(LocalObjectStore):
 
 
 @pytest.fixture
-def config(tmp_path: Path) -> Config:
+def config(tmp_path: Path, request) -> Config:
+    # Eviction tests want a cache measured in bytes; execution tests need room
+    # for real files. A module sets CACHE_CEILING to say which it is.
     return Config(
         cache_root=tmp_path / "cache",
         workspace_root=tmp_path / "workspace",
         state_dir=tmp_path / "state",
-        cache_ceiling=1000,
+        cache_ceiling=getattr(request.module, "CACHE_CEILING", 1000),
         min_free=0,
         store_backend="local",
         local_store_root=tmp_path / "store",
@@ -88,6 +90,100 @@ def hub() -> RecordingHub:
 @pytest.fixture
 def cache(config: Config, store: LocalObjectStore, hub: RecordingHub) -> Cache:
     return Cache(config, store=store, hub=hub)
+
+
+@pytest.fixture
+def workspace(config: Config) -> Path:
+    config.workspace_root.mkdir(parents=True, exist_ok=True)
+    return config.workspace_root
+
+
+@pytest.fixture
+def runs(cache: Cache):
+    from nawat.runs import RunStore
+
+    return RunStore(cache.db, config_state(cache) / "runs")
+
+
+def config_state(cache: Cache) -> Path:
+    return cache.config.state_dir
+
+
+@pytest.fixture
+def executor(cache: Cache, runs):
+    from nawat.executor import Executor
+
+    return Executor(cache, runs)
+
+
+@pytest.fixture
+def script(workspace: Path):
+    """Write a training script into the workspace and return its relative name."""
+
+    def build(body: str, name: str = "train.py") -> str:
+        path = workspace / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        return name
+
+    return build
+
+
+class FakeBackend:
+    """Runs tests/fake_server.py the way the vLLM backend runs vllm."""
+
+    name = "fake"
+    supports_adapters = True
+
+    def __init__(self, ready_after: float = 0.0, exit_after: float = 0.0) -> None:
+        self.ready_after = ready_after
+        self.exit_after = exit_after
+
+    def command(self, *, model_path: Path, model_name: str, port: int, extra: list[str]) -> list[str]:
+        import sys
+
+        command = [
+            sys.executable,
+            "-m",
+            "tests.fake_server",
+            "--port",
+            str(port),
+            "--model",
+            model_name,
+            "--ready-after",
+            str(self.ready_after),
+        ]
+        if self.exit_after:
+            command += ["--exit-after", str(self.exit_after)]
+        return command + list(extra)
+
+    def environment(self) -> dict[str, str]:
+        return {"PYTHONPATH": str(Path(__file__).resolve().parent.parent)}
+
+    def health_path(self) -> str:
+        return "/health"
+
+
+@pytest.fixture
+def free_port() -> int:
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+@pytest.fixture
+def sessions(cache: Cache, free_port: int):
+    """A session manager wired to the fake server, on a port nothing else uses."""
+    from dataclasses import replace as dataclass_replace
+
+    from nawat.sessions import SessionManager
+
+    cache.config = dataclass_replace(cache.config, serve_port=free_port, serve_startup_timeout=20.0)
+    manager = SessionManager(cache, backend=FakeBackend())
+    yield manager
+    manager.stop()
 
 
 @pytest.fixture
