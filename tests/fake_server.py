@@ -84,6 +84,15 @@ class Handler(BaseHTTPRequestHandler):
             if not known:
                 self._send(404, {"error": f"unknown model {model}"})
                 return
+            # A prompt of "ECHO <x>" answers "<x>", so tests control predictions.
+            content = f"served by {model}"
+            messages = payload.get("messages") or []
+            if messages:
+                last = messages[-1].get("content", "")
+                if isinstance(last, list):
+                    last = " ".join(p.get("text", "") for p in last if p.get("type") == "text")
+                if isinstance(last, str) and last.startswith("ECHO "):
+                    content = last[5:]
             self._send(
                 200,
                 {
@@ -91,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
                     "object": "chat.completion",
                     "model": model,
                     "choices": [
-                        {"index": 0, "message": {"role": "assistant", "content": f"served by {model}"}, "finish_reason": "stop"}
+                        {"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}
                     ],
                 },
             )

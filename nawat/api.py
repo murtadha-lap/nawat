@@ -71,6 +71,15 @@ class AdapterBody(BaseModel):
     name: str | None = None
 
 
+class EvaluateBody(BaseModel):
+    data: str = Field(description="A dataset key or local path holding the eval JSONL")
+    file: str | None = None
+    base: str | None = None
+    limit: int | None = None
+    label: str | None = None
+    per_sample: bool = False
+
+
 class PublishBody(BaseModel):
     directory: str
     key: str
@@ -357,6 +366,39 @@ def create_app(
     @app.post("/runs/{run_id}/cancel", dependencies=guard)
     def cancel(run_id: str) -> dict[str, Any]:
         return platform.executor.cancel(run_id).to_json()
+
+    # -- evaluation --------------------------------------------------------
+
+    @app.post("/runs/{run_id}/evaluate", dependencies=guard)
+    def evaluate_run(run_id: str, body: EvaluateBody) -> dict[str, Any]:
+        """Score the run's adapter against a held-out set (FR-4.7).
+
+        Synchronous: evaluation sets are small and the caller wants the number.
+        """
+        from .evaluate import Evaluator
+
+        evaluator = Evaluator(platform.cache, platform.runs, platform.sessions)
+        result = evaluator.evaluate_run(
+            run_id, body.data, base=body.base, file_name=body.file,
+            limit=body.limit, label=body.label,
+        )
+        summary = result.to_json()
+        if not body.per_sample:
+            summary.pop("per_sample")
+        return summary
+
+    @app.get("/runs/{run_id}/evaluations", dependencies=guard)
+    def list_evaluations(run_id: str) -> list[dict[str, Any]]:
+        platform.runs.get(run_id)
+        out = []
+        for path in sorted(platform.runs.directory(run_id).glob("eval-*.json")):
+            try:
+                data = json.loads(path.read_text())
+                data.pop("per_sample", None)
+                out.append(data)
+            except ValueError:
+                continue
+        return out
 
     # -- metrics -----------------------------------------------------------
 
