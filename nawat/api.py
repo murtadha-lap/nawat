@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, AsyncIterator, Iterator
@@ -181,11 +182,15 @@ def create_app(
     def health() -> dict[str, Any]:
         session = platform.sessions.current()
         active = platform.runs.active()
+        status = platform.cache.status()
         return {
             "status": "ok",
             "cache": _status_json(platform.cache),
             "run": active[0].to_json() if active else None,
             "session": session.to_json() if session else None,
+            "gpu": gpu_info(),
+            "warnings": storage_warnings(status),
+            "jupyter_url": os.environ.get("NAWAT_JUPYTER_URL") or None,
         }
 
     @app.get("/check", dependencies=guard)
@@ -476,7 +481,63 @@ def create_app(
             media_type=response.headers.get("content-type"),
         )
 
+    # -- the interface -----------------------------------------------------
+
+    ui_dir = Path(__file__).parent / "ui"
+    if ui_dir.is_dir():
+        from fastapi.responses import RedirectResponse
+        from fastapi.staticfiles import StaticFiles
+
+        app.mount("/ui", StaticFiles(directory=str(ui_dir), html=True), name="ui")
+
+        @app.get("/", include_in_schema=False)
+        def index() -> RedirectResponse:
+            return RedirectResponse(url="/ui/")
+
     return app
+
+
+_GPU_CACHE: dict[str, Any] = {"at": 0.0, "value": None}
+
+
+def gpu_info() -> dict[str, Any] | None:
+    """One reading from nvidia-smi, cached briefly. None when there is no GPU."""
+    import subprocess
+
+    now = time.time()
+    if now - _GPU_CACHE["at"] < 2.0:
+        return _GPU_CACHE["value"]
+    value = None
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,utilization.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            name, used, total, util = [part.strip() for part in out.stdout.strip().splitlines()[0].split(",")]
+            value = {
+                "name": name,
+                "memory_used": int(used) * 2**20,
+                "memory_total": int(total) * 2**20,
+                "utilization": int(util),
+            }
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        value = None
+    _GPU_CACHE.update(at=now, value=value)
+    return value
+
+
+def storage_warnings(status) -> list[str]:
+    """Storage-pressure conditions, surfaced prominently (FR-5.7)."""
+    warnings: list[str] = []
+    if status.ceiling and status.fraction >= 0.9:
+        warnings.append(f"cache at {status.fraction * 100:.0f}% of its ceiling")
+    if status.unreplicated_bytes:
+        warnings.append(f"{human_bytes(status.unreplicated_bytes)} exists only on this disk")
+    if status.disk_free < 5 * 10**9:
+        warnings.append(f"only {human_bytes(status.disk_free)} free on the filesystem")
+    return warnings
 
 
 async def _sweep_idle(platform: Platform) -> None:
