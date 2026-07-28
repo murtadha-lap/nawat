@@ -22,6 +22,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from . import metrics
 from .cache import Cache, open_cache
 from .config import Config
 from .errors import NawatError
@@ -351,6 +352,55 @@ def create_app(
     @app.post("/runs/{run_id}/cancel", dependencies=guard)
     def cancel(run_id: str) -> dict[str, Any]:
         return platform.executor.cancel(run_id).to_json()
+
+    # -- metrics -----------------------------------------------------------
+
+    @app.get("/runs/{run_id}/metrics", dependencies=guard)
+    def run_metrics(run_id: str) -> dict[str, Any]:
+        """The full series, renderable long after the artifacts are gone (FR-7.6)."""
+        platform.runs.get(run_id)
+        points = metrics.read_points(platform.runs.metrics_path(run_id))
+        return {
+            "run_id": run_id,
+            "points": len(points),
+            "series": metrics.series(points),
+            "events": metrics.events(points),
+        }
+
+    @app.get("/runs/{run_id}/metrics/stream", dependencies=guard)
+    def stream_metrics(run_id: str) -> StreamingResponse:
+        """Server-sent events: each point as it is written, live (FR-7.1)."""
+        platform.runs.get(run_id)
+        path = platform.runs.metrics_path(run_id)
+
+        def running() -> bool:
+            record = platform.runs.find(run_id)
+            return record is not None and not record.state.terminal
+
+        def event_stream() -> Iterator[bytes]:
+            for point in metrics.follow(path, running):
+                yield f"data: {json.dumps(point)}\n\n".encode()
+            record = platform.runs.get(run_id)
+            yield f"event: state\ndata: {json.dumps(record.to_json())}\n\n".encode()
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/metrics/compare", dependencies=guard)
+    def compare_metrics(
+        run: list[str] = Query(default=[]),
+        name: str = "loss",
+    ) -> dict[str, list[dict[str, Any]]]:
+        """One metric across several runs, on shared axes (FR-7.3)."""
+        out: dict[str, list[dict[str, Any]]] = {}
+        for run_id in run:
+            platform.runs.get(run_id)
+            points = metrics.read_points(platform.runs.metrics_path(run_id))
+            out[run_id] = metrics.series(points).get(name, [])
+        return out
 
     # -- sessions ----------------------------------------------------------
 

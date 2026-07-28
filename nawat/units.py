@@ -60,3 +60,30 @@ def bar(fraction: float, width: int = 24) -> str:
     fraction = min(max(fraction, 0.0), 1.0)
     filled = int(round(fraction * width))
     return "█" * filled + "░" * (width - filled)
+
+
+_SPARK_LEVELS = "▁▂▃▄▅▆▇█"
+
+
+def spark(values: list[float], width: int = 40) -> str:
+    """A metric series as a terminal trace.
+
+    Values are bucketed to ``width`` columns (mean per bucket) and mapped onto
+    eight levels between the series minimum and maximum.
+    """
+    if not values:
+        return ""
+    if len(values) > width:
+        size = len(values) / width
+        values = [
+            sum(bucket) / len(bucket)
+            for bucket in (
+                values[int(i * size) : max(int((i + 1) * size), int(i * size) + 1)] for i in range(width)
+            )
+            if bucket
+        ]
+    low, high = min(values), max(values)
+    if high == low:
+        return _SPARK_LEVELS[3] * len(values)
+    scale = (len(_SPARK_LEVELS) - 1) / (high - low)
+    return "".join(_SPARK_LEVELS[int(round((v - low) * scale))] for v in values)

@@ -146,6 +146,7 @@ class Executor:
                 "NAWAT_WORKSPACE": str(self.config.workspace_root),
                 "NAWAT_INPUTS": json.dumps(plan.inputs),
                 "NAWAT_PARAMS": json.dumps(dict(spec.params)),
+                "NAWAT_METRICS_PATH": str(self.runs.metrics_path(record.id)),
                 "PYTHONUNBUFFERED": "1",
                 # The run is offline by construction: an input that was not
                 # declared and staged fails here rather than being downloaded

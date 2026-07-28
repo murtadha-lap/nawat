@@ -195,6 +195,13 @@ class RunStore:
     def log_path(self, run_id: str) -> Path:
         return self.directory(run_id) / "run.log"
 
+    def metrics_path(self, run_id: str) -> Path:
+        """The durable metric series — state directory, never the cache, so it
+        outlives every artifact the run produced (FR-7.6)."""
+        from .metrics import FILENAME
+
+        return self.directory(run_id) / FILENAME
+
     def record_path(self, run_id: str) -> Path:
         return self.directory(run_id) / "run.json"
 

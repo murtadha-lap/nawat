@@ -167,7 +167,7 @@ trainer = SFTTrainer(
         max_length = 2048,
     ),
 )
-trainer.train()
+trainer.train()   # add callbacks=[nawat.metrics.trainer_callback()] above for a live loss trace
 
 # Everything written under NAWAT_OUT_DIR is published as its own artifact class
 # when the run exits 0 — uploaded, verified file by file, then reclaimed.
@@ -212,6 +212,34 @@ What happens, in order:
 | `save_pretrained("qwen_lora")` | `save_pretrained(OUT / "adapter")` |
 | `push_to_hub(..., token=...)` | automatic verified publish to your own store |
 | manual `rm -rf` between runs | automatic, refuses when unsafe |
+
+**Watch the run from a chart, not scrollback.** Add one line to the trainer —
+
+```python
+import nawat.metrics
+trainer = SFTTrainer(..., callbacks = [nawat.metrics.trainer_callback()])
+```
+
+— and every logging step (loss, learning rate, grad norm, computed steps/second,
+epoch boundaries) streams into the run's metric series. Scripts that don't use a
+Trainer call `nawat.metrics.log(step=..., loss=...)` directly, and any language
+can append JSON lines to `$NAWAT_METRICS_PATH`. Then:
+
+```text
+$ nawat metrics <id>            # -f to stream live
+run metrics-smoke · 33 points
+
+loss   █▇▆▆▅▅▄▄▃▃▃▃▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁  2.256 → 0.1088   min 0.1088 @ 30
+lr     ███▇▇▇▇▆▆▆▆▅▅▅▅▄▄▄▄▃▃▃▃▂▂▂▂▁▁▁  0.0001933 → 0    min 0 @ 30
+
+event  step 10  epoch_end
+```
+
+The series lives beside the run log — never in the cache, so it is never
+evicted — and is published to object storage with the run record: the chart
+renders identically long after the weights themselves are gone. Over HTTP:
+`/runs/{id}/metrics`, `/runs/{id}/metrics/stream` (server-sent events), and
+`/metrics/compare?run=a&run=b&name=loss` for overlaying runs on shared axes.
 
 Notebooks submit too (`nawat submit explore.ipynb ...`): the notebook is executed
 with nbconvert and the executed copy is archived as the run record. Adapt the
@@ -273,6 +301,7 @@ nawat.holding(...)` scopes it tighter.
 | `nawat leases` | What is in use, and by whom |
 | `nawat submit SCRIPT ...` | Run a training script as a recorded run |
 | `nawat runs` / `run ID` / `logs ID [-f]` / `cancel ID` | History, record, log, stop |
+| `nawat metrics ID [-f]` | The metric series as a terminal trace, or streamed live |
 | `nawat serve KEY` / `adapter KEY` / `session --stop` | Serve, hot-load, tear down |
 | `nawat api` | The control plane over HTTP (docs at `/docs`) |
 | `nawat check` | Prove this host can store, verify and reclaim |
