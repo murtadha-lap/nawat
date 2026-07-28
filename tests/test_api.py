@@ -27,9 +27,12 @@ CACHE_CEILING = 50 * 10**6
 
 TRAINER = """
 import os, pathlib
+import nawat.metrics as m
 out = pathlib.Path(os.environ["NAWAT_OUT_DIR"])
 (out / "adapter").mkdir(parents=True, exist_ok=True)
 (out / "adapter" / "adapter_model.safetensors").write_bytes(b"w" * 1024)
+m.log(step=1, loss=2.31)
+m.log(step=2, loss=1.87)
 print("step 1 loss 2.31", flush=True)
 print("step 2 loss 1.87", flush=True)
 """
@@ -221,6 +224,40 @@ def test_cancelling_a_queued_run_over_http(client, cached, script):
     client.post(f"/runs/{first}/cancel")
     record = wait_for(client, first)
     assert record["state"] == "cancelled"
+
+
+def test_metrics_are_served_and_streamed_over_http(client, script):
+    script(TRAINER)
+    run_id = client.post("/runs", json={"script": "train.py"}).json()["id"]
+    wait_for(client, run_id)
+
+    served = client.get(f"/runs/{run_id}/metrics").json()
+    assert served["points"] == 2
+    assert [entry["value"] for entry in served["series"]["loss"]] == [2.31, 1.87]
+
+    with client.stream("GET", f"/runs/{run_id}/metrics/stream") as response:
+        body = "".join(chunk for chunk in response.iter_text())
+    assert '"loss": 2.31' in body
+    assert "event: state" in body
+
+
+def test_metrics_compare_across_runs_on_one_axis(client, script):
+    script(TRAINER)
+    first = client.post("/runs", json={"script": "train.py", "run_id": "run-a"}).json()["id"]
+    wait_for(client, first)
+    second = client.post("/runs", json={"script": "train.py", "run_id": "run-b"}).json()["id"]
+    wait_for(client, second)
+
+    compared = client.get("/metrics/compare", params=[("run", "run-a"), ("run", "run-b"), ("name", "loss")]).json()
+
+    assert set(compared) == {"run-a", "run-b"}
+    assert [entry["step"] for entry in compared["run-a"]] == [1, 2]
+    strip = lambda entries: [(e["step"], e["value"]) for e in entries]
+    assert strip(compared["run-a"]) == strip(compared["run-b"]) == [(1, 2.31), (2, 1.87)]
+
+
+def test_metrics_for_an_unknown_run_is_a_404_not_an_empty_series(client):
+    assert client.get("/runs/never/metrics").status_code == 404
 
 
 def test_scripts_are_listed_from_the_workspace(client, script):

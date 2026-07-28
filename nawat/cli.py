@@ -467,6 +467,53 @@ def cmd_cancel(cache: Cache, args) -> int:
     return 0
 
 
+def cmd_metrics(cache: Cache, args) -> int:
+    from . import metrics
+    from .units import spark
+
+    runs = _run_store(cache)
+    runs.get(args.run_id)
+    path = runs.metrics_path(args.run_id)
+
+    if args.follow:
+        def running() -> bool:
+            record = runs.find(args.run_id)
+            return record is not None and not record.state.terminal
+
+        for point in metrics.follow(path, running):
+            print(json.dumps(point))
+        return 0
+
+    points = metrics.read_points(path)
+    if args.json:
+        print(json.dumps({"series": metrics.series(points), "events": metrics.events(points)}, indent=2))
+        return 0
+    if not points:
+        print(f"Run {args.run_id} recorded no metrics.")
+        print("Log them from the script with nawat.metrics.log(step=..., loss=...),")
+        print("or pass callbacks=[nawat.metrics.trainer_callback()] to the trainer.")
+        return 0
+
+    print(f"run {args.run_id} · {len(points)} points\n")
+    all_series = metrics.series(points)
+    name_width = max(len(name) for name in all_series)
+    for name in sorted(all_series):
+        entries = all_series[name]
+        values = [entry["value"] for entry in entries]
+        lowest = min(entries, key=lambda entry: entry["value"])
+        line = spark(values)
+        print(
+            f"{name.ljust(name_width)}  {line}  {values[0]:.4g} → {values[-1]:.4g}"
+            f"   min {lowest['value']:.4g} @ {lowest['step']}"
+        )
+    marks = metrics.events(points)
+    if marks:
+        print()
+        for mark in marks:
+            print(f"event  step {mark['step']}  {mark['event']}")
+    return 0
+
+
 def cmd_scripts(cache: Cache, args) -> int:
     root = cache.config.workspace_root
     if not root.is_dir():
@@ -705,6 +752,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("cancel", help="stop a run and release what it holds")
     p.add_argument("run_id")
     p.set_defaults(run=cmd_cancel)
+
+    p = sub.add_parser("metrics", help="a run's metric series — the trace, in the terminal")
+    p.add_argument("run_id")
+    p.add_argument("-f", "--follow", action="store_true", help="stream points as they are written")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_metrics)
 
     p = sub.add_parser("scripts", help="training scripts and notebooks in the workspace")
     p.set_defaults(run=cmd_scripts)
