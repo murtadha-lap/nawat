@@ -1,22 +1,103 @@
-# Nawāt (نواة)
+<div align="center">
 
-<p align="center">
-  <img src="docs/image.png" alt="Nawāt research flow from local models and datasets through managed training to verified adapters and vLLM inference" width="100%">
+<img src="docs/ChatGPT%20Image%20Jul%2030%2C%202026%2C%2002_12_26%20AM.png" alt="Nawāt — local-first AI training and inference" width="760">
+
+# Nawāt
+
+### Train locally. Store durably. Reproduce every run.
+
+**A local-first training and inference workspace for AI researchers using Unsloth, LoRA, vLLM, and S3-compatible object storage.**
+
+<p>
+  <a href="https://github.com/murtadha-lap/nawat"><img alt="Repository" src="https://img.shields.io/badge/GitHub-murtadha--lap%2Fnawat-181717?logo=github"></a>
+  <a href="LICENSE"><img alt="License: PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-16a34a"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="Platform: Linux" src="https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&logoColor=black">
 </p>
 
-**Local-first training and inference for AI researchers.**
+<p>
+  <img alt="Unsloth" src="https://img.shields.io/badge/training-Unsloth-7C3AED">
+  <img alt="NVIDIA CUDA" src="https://img.shields.io/badge/compute-NVIDIA%20CUDA-76B900?logo=nvidia&logoColor=white">
+  <img alt="vLLM" src="https://img.shields.io/badge/inference-vLLM-0EA5E9">
+  <img alt="LoRA" src="https://img.shields.io/badge/adapters-LoRA-14B8A6">
+  <img alt="S3-compatible storage" src="https://img.shields.io/badge/storage-S3--compatible-FF9900?logo=amazons3&logoColor=white">
+  <img alt="Local-first" src="https://img.shields.io/badge/workflow-local--first-22C55E">
+</p>
 
-Nawāt lets one GPU workstation work with more models and data than fit on its
-local disk. Models, datasets, adapters, logs, metrics, and run records live in
-your S3-compatible object store. A bounded local cache holds only the current
-training or inference working set.
+<p>
+  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="#first-experiment-qwen35-08b"><strong>Train a model</strong></a> ·
+  <a href="#use-nawāt-in-an-unsloth-notebook"><strong>Unsloth notebook</strong></a> ·
+  <a href="#inference-with-nawāt-and-vllm"><strong>Run with vLLM</strong></a> ·
+  <a href="#local-storage-operations"><strong>Manage storage</strong></a> ·
+  <a href="#troubleshooting"><strong>Troubleshooting</strong></a>
+</p>
 
-Write ordinary Unsloth notebooks or training scripts. Nawāt stages their inputs,
-protects files in use, records each experiment, publishes verified outputs, and
-reclaims local space. After training, hot-load the LoRA into vLLM without merging
-weights or restarting the server.
+</div>
 
-> The Python package and CLI command are `nawat`. Nawāt (نواة) means “nucleus.”
+---
+
+Nawāt lets one GPU workstation work with more models and datasets than fit on
+its local disk. It stages only the active working set, protects files used by
+live jobs, records every experiment, publishes verified artifacts to durable
+object storage, and safely reclaims local space.
+
+Your training code remains ordinary Python. Use an existing Unsloth notebook or
+script, replace hub identifiers with Nawāt-managed local paths, and keep the
+same workflow from a three-step smoke test through repeatable LoRA training and
+vLLM inference.
+
+> The Python package and CLI command are `nawat`. **Nawāt** (نواة) means
+> “nucleus”—the small core coordinating the research workflow.
+
+## Why Nawāt
+
+| | Capability | Research benefit |
+| --- | --- | --- |
+| 💾 | **Bounded local cache** | Work with a large model library without filling the workstation disk |
+| ☁️ | **Durable object storage** | Keep models, datasets, adapters, logs, and metrics in an S3-compatible source of truth |
+| 🧪 | **Reproducible runs** | Record the exact script, model, dataset, parameters, metrics, and outputs |
+| 🔒 | **Lease-safe files** | Prevent active training or inference artifacts from being evicted |
+| ⚡ | **Unsloth-native training** | Run ordinary scripts and notebooks against local staged paths |
+| 🔌 | **Hot-loaded LoRA** | Load compatible adapters into vLLM without merging weights or restarting |
+| ♻️ | **Verified reclamation** | Delete local copies only after the remote artifact is verified |
+| 📦 | **Large-dataset tooling** | Publish directories or pack small-file corpora into sequential tar shards |
+
+## Research workflow
+
+```text
+models + datasets → bounded cache → Unsloth training → verified adapter → vLLM
+                           ↕
+               S3-compatible object storage
+```
+
+## Quick start
+
+```bash
+# Install Nawāt from this checkout
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U uv
+uv pip install -e ".[notebook]"
+
+# Configure and verify storage
+cp .env.example .env
+$EDITOR .env
+nawat check --create-bucket
+
+# Submit a cheap smoke test from your workspace
+nawat submit train_latex_ocr.py \
+  --model models/unsloth/Qwen3.5-0.8B \
+  --dataset datasets/unsloth/LaTeX_OCR \
+  --param max_steps=3 \
+  --param learning_rate=2e-4 \
+  --param rank=16 \
+  --param export=none
+```
+
+The sections below cover the complete installation, GPU checks, storage setup,
+training workflow, adapter publishing, vLLM inference, cache management, and
+common failure modes.
 
 ## What Nawāt manages
 

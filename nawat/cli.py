@@ -543,43 +543,11 @@ def _sessions(cache: Cache):
     return SessionManager(cache, runs=_run_store(cache))
 
 
-def _primary_address() -> str | None:
-    """This host's address on the interface carrying its default route."""
-    import socket
-
-    # Connecting a UDP socket only selects a route; nothing is sent, and the
-    # destination is reserved for documentation so it cannot be mistaken for
-    # real traffic.
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        try:
-            sock.connect(("192.0.2.0", 9))
-            return sock.getsockname()[0]
-        except OSError:
-            return None
-
-
-def _reachable_url(cache: Cache, port: int) -> str | None:
-    """The URL other machines use, or None when the server is loopback-only.
-
-    ``base_url`` stays on loopback because that is what Nawāt itself talks to;
-    this is only for telling the researcher where the server actually answers.
-    """
-    host = cache.config.serve_host
-    if host in ("", "127.0.0.1", "localhost", "::1"):
-        return None
-    if host in ("0.0.0.0", "::"):
-        host = _primary_address() or host
-    return f"http://{host}:{port}/v1"
-
-
 def cmd_serve(cache: Cache, args) -> int:
     manager = _sessions(cache)
     _err(f"Starting an inference server for {args.key} — this takes a minute for a large base.")
     session = manager.start(args.key, idle_timeout=args.idle_timeout, wait=not args.no_wait)
     print(f"Serving {session.model} at {session.base_url}/v1 ({session.state.value}).")
-    reachable = _reachable_url(cache, session.port)
-    if reachable:
-        print(f"Reachable on this network at {reachable} — vLLM does not authenticate callers.")
     print(f"Idle timeout {human_age(session.idle_timeout)}; the GPU is released after that.")
     return 0
 
@@ -604,9 +572,6 @@ def cmd_session(cache: Cache, args) -> int:
     print(f"model      {session.model}")
     print(f"state      {session.state.value}")
     print(f"url        {session.base_url}/v1")
-    reachable = _reachable_url(cache, session.port)
-    if reachable:
-        print(f"network    {reachable}")
     print(f"pid        {session.pid}")
     print(f"idle for   {human_age(session.idle_for)} of {human_age(session.idle_timeout)}")
     for name, key in session.adapters.items():
