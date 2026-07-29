@@ -1,6 +1,6 @@
 # Nawāt (نواة)
 
-**Fine-tune on a small disk as if it were a big one.**
+**The local-first training workspace for AI researchers.**
 
 Nawāt is a self-hosted platform for fine-tuning and serving open-weight models on a
 single GPU workstation whose local storage is far smaller than its working corpus.
@@ -14,6 +14,29 @@ same implementation.
 
 Working examples: [examples/](examples/) — the Unsloth Qwen3.5-0.8B vision
 notebook, and the same fine-tune as a submitted script.
+
+## Researcher quick path
+
+Nawāt keeps durable models, datasets, adapters, logs, and run metadata in your own S3-compatible store while a bounded local cache holds only the current training or inference working set.
+
+1. Configure storage and verify it: `cp .env.example .env`, edit the cache ceiling and S3 settings, then run `nawat check --create-bucket`.
+2. Open [`examples/latex_ocr_qwen3_5_vision.ipynb`](examples/latex_ocr_qwen3_5_vision.ipynb), the complete Unsloth Qwen3.5-0.8B vision fine-tune on `unsloth/LaTeX_OCR`.
+3. For a background run, submit [`examples/train_latex_ocr.py`](examples/train_latex_ocr.py) with the model, dataset, and hyperparameters shown below.
+4. Start the base with `nawat serve`, then hot-load `runs/<run-id>/adapter` with `nawat adapter`; vLLM serves it without a merge or restart.
+
+```text
+Hugging Face (first use only)
+            ↓
+S3-compatible object storage  ← durable source of truth
+            ↓
+bounded local cache           ← active working set
+            ↓
+      Unsloth or vLLM
+```
+
+The local disk only needs one working set, not the full research corpus. Resolution follows local cache → object storage → Hugging Face, and the first internet fetch writes through to your store. In-use, unreplicated, or unverifiable artifacts are never evicted.
+For image, audio, or document corpora with many small files, `nawat shard /data/corpus datasets/lab/corpus-v1 --shard-size 512MB` creates WebDataset-compatible tar shards for efficient sequential reads.
+
 
 ---
 
