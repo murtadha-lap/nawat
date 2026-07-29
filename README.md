@@ -50,6 +50,34 @@ vLLM inference.
 > The Python package and CLI command are `nawat`. **Nawāt** (نواة) means
 > “nucleus”—the small core coordinating the research workflow.
 
+## The research problem
+
+AI research on a local GPU is often limited by storage and workflow friction,
+not only compute. Models and datasets are downloaded repeatedly, experiments
+leave large checkpoints behind, and a workstation disk quickly fills as the
+number of models, datasets, and adapters grows. Researchers then have to move
+files manually and remember which script, parameters, dataset, and base model
+produced each result.
+
+That creates five recurring problems:
+
+- **Local storage does not scale with the research library.** A workstation may
+  have enough space for the current run, but not every model, dataset, and adapter.
+- **Downloads and manual copies waste time.** The same large artifacts are
+  fetched again or copied between machines without a durable catalog.
+- **Experiments are difficult to reproduce.** Parameters, logs, metrics, and
+  outputs can become separated from the exact inputs and script that made them.
+- **Disk cleanup is risky.** It is easy to delete an active or unreplicated
+  artifact, while cautious manual cleanup leaves expensive storage unused.
+- **Training and inference feel disconnected.** A completed LoRA still has to
+  be located, matched to its base model, staged, and served correctly.
+
+Nawāt turns object storage into the durable research library and the local disk
+into a bounded working set. It stages inputs when needed, leases files while
+they are active, records the full run, verifies outputs remotely, reclaims safe
+local copies, and makes trained adapters available to vLLM through stable
+artifact keys.
+
 ## Why Nawāt
 
 | | Capability | Research benefit |
@@ -516,7 +544,6 @@ vllm --version
 Optional `.env` settings for a 16 GB GPU:
 
 ```dotenv
-NAWAT_SERVE_HOST=127.0.0.1
 NAWAT_SERVE_PORT=8001
 NAWAT_SERVE_STARTUP_TIMEOUT=600
 NAWAT_SERVE_IDLE_TIMEOUT=900
@@ -525,40 +552,38 @@ NAWAT_SERVE_EXTRA_ARGS=--gpu-memory-utilization 0.85 --max-model-len 4096
 
 ### 2. Reaching the server from another machine
 
-`NAWAT_SERVE_HOST` defaults to `127.0.0.1`, so the server answers only on this
-workstation. Set it to `0.0.0.0` to bind every interface, and `nawat serve` and
-`nawat session` will then also print the address other machines should use:
+The vLLM server always binds loopback, and there is no setting to change that on
+purpose: it authenticates nobody, so exposing it directly would let anything that
+can route to the port spend your GPU and load adapters. vLLM's own `--api-key` is
+not a fix either — it guards every path under `/v1`, which is where Nawāt posts
+`load_lora_adapter` without a bearer token, so a key breaks `nawat adapter`.
 
-```dotenv
-NAWAT_SERVE_HOST=0.0.0.0
-```
-
-Unlike the control plane, vLLM checks no credential of its own — once bound to
-`0.0.0.0`, anything that can route to the port can spend your GPU and load
-adapters. Restrict the port to the subnet you trust:
-
-```bash
-sudo ufw allow from 192.168.0.0/24 to any port 8001 proto tcp
-```
-
-Do not reach for vLLM's `--api-key` here. It guards every path under `/v1`,
-which is where Nawāt sends its own `load_lora_adapter` and `unload_lora_adapter`
-calls without a bearer token, so a key breaks `nawat adapter` and the control
-plane's `/v1` passthrough.
-
-For an exposed endpoint that *is* authenticated, leave the server on loopback
-and publish the control plane instead — it proxies `/v1` behind
+The network-facing address is the control plane, which proxies `/v1` behind
 `NAWAT_API_TOKEN`:
 
 ```dotenv
-NAWAT_SERVE_HOST=127.0.0.1
 NAWAT_API_HOST=0.0.0.0
+NAWAT_API_PORT=8081
 NAWAT_API_TOKEN=a-long-random-string
 ```
 
 ```bash
 nawat api
 ```
+
+Clients then use the control plane's address and send the token, and that URL
+keeps working across model swaps and restarts because Nawāt resolves the current
+session per request:
+
+```bash
+curl http://192.168.0.207:8081/v1/completions \
+  -H "Authorization: Bearer a-long-random-string" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"models/unsloth/Qwen3.5-2B","prompt":"2+2=","max_tokens":10}'
+```
+
+Proxied requests also refresh the idle timer, so a session in active use is not
+reclaimed underneath you.
 
 ### 3. Start the matching base
 
