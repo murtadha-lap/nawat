@@ -81,16 +81,3 @@ nawat adapter runs/<id>/adapter --name latex-ocr
 # ... an OpenAI-compatible endpoint on :8001
 nawat session --stop
 ```
-
-Or take the GGUF to llama.cpp / Ollama. The notebook writes it to
-`run.artifact_dir("gguf")`, which publishes as `runs/<id>/gguf`; the script does
-the same behind `--param export=gguf`. Either way it lives in object storage and
-comes back on demand:
-
-```bash
-llama-cli -m "$(nawat resolve runs/<id>/gguf)"/*.gguf -p "..."
-```
-
-GGUF conversion is the step most likely to fail — llama.cpp has to support the
-architecture, and vision encoders lag behind text models. Both examples guard it,
-so a refusal costs you the export and not the training run.

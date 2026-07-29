@@ -51,7 +51,7 @@ class AgentBackend:
 
 
 class OpenAICompatBackend(AgentBackend):
-    """Any OpenAI-compatible endpoint — a local vLLM or llama.cpp keeps the
+    """Any OpenAI-compatible endpoint — a local inference server keeps the
     whole loop on-premises."""
 
     def __init__(self, base_url: str, model: str, api_key: str | None = None, timeout: float = 600.0) -> None:
