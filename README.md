@@ -1,7 +1,9 @@
 <div align="center">
-
-<img src="docs/ChatGPT%20Image%20Jul%2030%2C%202026%2C%2002_12_26%20AM.png" alt="Nawāt — local-first AI training and inference" width="760">
-
+  
+<p style="text-align: center">
+  <img align="center" src="docs/image.png#gh-light-mode-only" alt="Nawāt"><img align="center" src="docs/image.png#gh-light-mode-only" alt="Nawāt">
+</p>
+  
 # Nawāt
 
 ### Train locally. Store durably. Reproduce every run.
