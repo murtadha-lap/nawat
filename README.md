@@ -1,9 +1,6 @@
 <div align="center">
 
 <img src="docs/image.png" alt="Nawāt logo" width="280">
-
-# Nawāt
-
 ### Train locally. Store durably. Reproduce every run.
 
 **A local-first training and inference workspace for AI researchers using Unsloth, LoRA, vLLM, and S3-compatible object storage.**
