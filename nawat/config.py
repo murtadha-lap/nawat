@@ -105,12 +105,9 @@ class Config:
     api_port: int = 8080
     api_token: str | None = field(default=None, repr=False)
 
-    #: The inference server this session manager supervises. Like the control
-    #: plane it binds loopback by default; 0.0.0.0 reaches the local network.
-    #: vLLM authenticates nothing, and its own --api-key is not the answer here
-    #: because it guards the /v1 paths this package posts adapters to, so an
-    #: exposed port wants a firewall, or the control plane published instead.
-    serve_host: str = "127.0.0.1"
+    #: The inference server this session manager supervises. It always binds
+    #: loopback: vLLM authenticates nothing, so the network-facing address is
+    #: the control plane above, which proxies /v1 behind NAWAT_API_TOKEN.
     serve_port: int = 8001
     serve_idle_timeout: float = 900.0
     serve_startup_timeout: float = 600.0
@@ -150,7 +147,6 @@ class Config:
             api_host=env.get("NAWAT_API_HOST", "127.0.0.1"),
             api_port=int(env.get("NAWAT_API_PORT", "8080")),
             api_token=env.get("NAWAT_API_TOKEN") or None,
-            serve_host=env.get("NAWAT_SERVE_HOST", "127.0.0.1").strip(),
             serve_port=int(env.get("NAWAT_SERVE_PORT", "8001")),
             serve_idle_timeout=float(env.get("NAWAT_SERVE_IDLE_TIMEOUT", "900")),
             serve_startup_timeout=float(env.get("NAWAT_SERVE_STARTUP_TIMEOUT", "600")),
