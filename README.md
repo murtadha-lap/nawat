@@ -1,9 +1,7 @@
 <div align="center">
-  
-<p style="text-align: center">
-  <img align="center" src="docs/image.png#gh-light-mode-only" alt="Nawāt"><img align="center" src="docs/image.png#gh-light-mode-only" alt="Nawāt">
-</p>
-  
+
+<img src="docs/image.png" alt="Nawāt logo" width="280">
+
 # Nawāt
 
 ### Train locally. Store durably. Reproduce every run.
