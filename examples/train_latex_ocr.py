@@ -1,10 +1,19 @@
 """The LaTeX-OCR notebook as a submitted run.
 
+Derived from Unsloth's Qwen3.5-0.8B vision fine-tuning notebook and, like it,
+licensed LGPL-3.0 — not under the noncommercial licence covering the rest of
+this repository. See examples/LICENSE.
+
     nawat submit train_latex_ocr.py \
       --model   models/unsloth/Qwen3.5-0.8B \
       --dataset datasets/unsloth/LaTeX_OCR \
       --param   max_steps=500 --param learning_rate=2e-4 \
       --notes   "LaTeX OCR, long run"
+
+Add `--param export=gguf --param quantization=q4_k_m` to also produce a
+llama.cpp/Ollama build; `--param export=merged` for FP16 weights alone. Both are
+off by default because each is roughly the size of the base model, and vLLM
+serves the adapter without either.
 
 The same cells as latex_ocr_qwen3_5_vision.ipynb, minus the two the executor
 does for you: it opens the run before this process starts and closes it when
@@ -116,11 +125,31 @@ trainer.train()
 #
 # Everything under the output directory is published as its own artifact class
 # when this process exits 0 — uploaded, verified file by file, then reclaimed.
+# That is what keeps merged and GGUF exports from silently filling the disk:
+# they go to object storage and come back on demand.
 
 adapter = nawat.artifact_dir("adapter")         # ← was "qwen_lora"
 model.save_pretrained(adapter)
 tokenizer.save_pretrained(adapter)
 
-# Only when deployment needs them — each becomes runs/<id>/<name>:
-# model.save_pretrained_merged(nawat.artifact_dir("merged"), tokenizer)
-# model.save_pretrained_gguf(nawat.artifact_dir("gguf"), tokenizer, quantization_method="q4_k_m")
+# --export merged / --export gguf, off by default: both are the size of the base
+# model, and vLLM can serve the adapter without either (see the README).
+EXPORTS = {value.strip() for value in nawat.param("export", "").split(",") if value.strip()}
+
+if EXPORTS & {"merged", "gguf"}:
+    # GGUF conversion consumes merged weights, so it implies this step.
+    model.save_pretrained_merged(str(nawat.artifact_dir("merged")), tokenizer)
+
+if "gguf" in EXPORTS:
+    # Builds llama.cpp on first use. The likely failure is llama.cpp not
+    # supporting the architecture — vision encoders especially. Let the run
+    # succeed with what it has rather than throwing away a finished training.
+    try:
+        model.save_pretrained_gguf(
+            str(nawat.artifact_dir("gguf")),
+            tokenizer,
+            quantization_method=nawat.param("quantization", "q4_k_m"),
+        )
+    except Exception as exc:  # noqa: BLE001 - a failed export is not a failed run
+        print(f"[nawat] gguf conversion failed, publishing without it: "
+              f"{type(exc).__name__}: {exc}", flush=True)

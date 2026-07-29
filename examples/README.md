@@ -8,12 +8,18 @@ the experiment is worth six hours.
 | [latex_ocr_qwen3_5_vision.ipynb](latex_ocr_qwen3_5_vision.ipynb) | The Unsloth vision notebook — Qwen3.5-0.8B on `unsloth/LaTeX_OCR` — driven from a kernel as a recorded run |
 | [train_latex_ocr.py](train_latex_ocr.py) | The same body as a script, for `nawat submit` |
 
-Both need a working configuration first:
+Both need Nawāt installed and configured first:
 
 ```bash
-cp .env.example .env && $EDITOR .env
+uv pip install "nawat[notebook] @ git+https://github.com/murtadha-lap/nawat.git"
+cp .env.example .env && $EDITOR .env      # endpoint, bucket, credentials, ceiling
 nawat check --create-bucket
 ```
+
+Unsloth is not a dependency of Nawāt — install it however you normally do. The
+notebook's first cell will do it for you, but only when `unsloth` does not
+already import: on a workstation you pay for that once, not once per session.
+Force an upgrade with `NAWAT_FORCE_REINSTALL=1`.
 
 ## The three changed lines
 
@@ -67,9 +73,24 @@ nawat status               # occupancy against the cache ceiling
 
 ## After it finishes
 
+Serve it — the adapter hot-loads onto the base, nothing is merged:
+
 ```bash
 nawat serve models/unsloth/Qwen3.5-0.8B     # stage the base, start vLLM
 nawat adapter runs/<id>/adapter --name latex-ocr
-# ... an OpenAI-compatible endpoint on :8001, adapter hot-loaded, nothing merged
+# ... an OpenAI-compatible endpoint on :8001
 nawat session --stop
 ```
+
+Or take the GGUF to llama.cpp / Ollama. The notebook writes it to
+`run.artifact_dir("gguf")`, which publishes as `runs/<id>/gguf`; the script does
+the same behind `--param export=gguf`. Either way it lives in object storage and
+comes back on demand:
+
+```bash
+llama-cli -m "$(nawat resolve runs/<id>/gguf)"/*.gguf -p "..."
+```
+
+GGUF conversion is the step most likely to fail — llama.cpp has to support the
+architecture, and vision encoders lag behind text models. Both examples guard it,
+so a refusal costs you the export and not the training run.

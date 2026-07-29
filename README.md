@@ -10,9 +10,7 @@ Unsloth notebook or training script, and never touch a file to make room for it.
 
 It is a Python library first — `import nawat` in a Colab-style notebook and keep
 working the way you already do — with a CLI and an HTTP control plane over the
-same implementation. Operational procedures live in
-[docs/OPERATIONS.md](docs/OPERATIONS.md); the control plane runs as a systemd
-service via [deploy/nawat-api.service](deploy/nawat-api.service).
+same implementation.
 
 Working examples: [examples/](examples/) — the Unsloth Qwen3.5-0.8B vision
 notebook, and the same fine-tune as a submitted script.
@@ -53,30 +51,132 @@ training runs with hub access disabled, so a run can never silently download.
 
 ---
 
-## Quick start
+## Installation
+
+Python 3.11 or newer. The package itself is small — `boto3` and nothing else —
+because the heavy machinery (Unsloth, vLLM, llama.cpp) stays in your own
+environment where you already control the versions.
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e .
-cp .env.example .env && $EDITOR .env    # endpoint, bucket, credentials, cache ceiling
+pip install git+https://github.com/murtadha-lap/nawat.git
+```
+
+Or with [uv](https://docs.astral.sh/uv/), which is worth it here: it keeps one
+wheel cache for the whole machine, so the next environment you build links from
+local disk instead of downloading Torch and friends again.
+
+```bash
+uv pip install git+https://github.com/murtadha-lap/nawat.git
+```
+
+Extras, added as you need them:
+
+```bash
+uv pip install "nawat[notebook] @ git+https://github.com/murtadha-lap/nawat.git"   # + huggingface_hub, matplotlib
+uv pip install "nawat[api]      @ git+https://github.com/murtadha-lap/nawat.git"   # + the HTTP control plane
+uv pip install "nawat[agent]    @ git+https://github.com/murtadha-lap/nawat.git"   # + agent-assisted authoring
+```
+
+| Extra | Pulls in | For |
+| --- | --- | --- |
+| `hub` | `huggingface_hub` | Fetching models and datasets that are not yet in your store |
+| `notebook` | `huggingface_hub`, `matplotlib` | Notebook use, with the loss trace plotted inline |
+| `api` | `fastapi`, `uvicorn`, `httpx` | `nawat api` — HTTP control plane, queue, OpenAI-compatible `/v1` |
+| `agent` | `claude-agent-sdk` | `nawat agent` — proposed script changes, diff and approval |
+| `dev` | `pytest`, `moto` | Running the test suite |
+
+To hack on it:
+
+```bash
+git clone https://github.com/murtadha-lap/nawat.git && cd nawat
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,hub]"
+.venv/bin/python -m pytest        # the full suite, no GPU required
+```
+
+## Getting started, step by step
+
+**1. Have an S3-compatible object store.** Anything that speaks the protocol:
+[RustFS](https://docs.rustfs.com/installation/linux/quick-start), MinIO, SeaweedFS,
+Ceph, or AWS S3 itself. This is where your models, datasets and results actually
+live; the local disk is only a cache in front of it.
+
+**2. Configure.** Copy the template and fill in the endpoint, bucket, credentials
+and how much local disk Nawāt may use:
+
+```bash
+cp .env.example .env && $EDITOR .env
+```
+
+The four that matter:
+
+```bash
+NAWAT_S3_ENDPOINT=http://192.168.0.155:9000   # your object store
+NAWAT_S3_BUCKET=ai-model
+NAWAT_CACHE_CEILING=120GB                     # how much local disk Nawāt may use
+NAWAT_MIN_FREE=10GB                           # headroom it will never eat into
+```
+
+`nawat` finds `.env` on its own — the nearest one at or above the working
+directory — so there is nothing to source, and it works the same from a notebook
+kernel started anywhere in the tree. Exported variables still win, for one-off
+overrides.
+
+**3. Prove the pairing works.** Not a ping: this writes, lists, verifies and
+deletes a probe object, because those are the four things everything else
+depends on.
+
+```bash
 nawat check --create-bucket
 ```
 
-`nawat` finds `.env` on its own (nearest one at or above the working directory);
-nothing to source. Exported variables still win for one-off overrides.
-
-Nawāt speaks to any S3-compatible object store. This deployment uses
-[RustFS](https://docs.rustfs.com/installation/linux/quick-start) running as a
-systemd service; point `NAWAT_S3_ENDPOINT` at it. `nawat check` proves the pairing
-works — it writes, lists, verifies and deletes a probe object rather than pinging.
-
 ```text
-ok    configuration              /home/lap/lap/tr/.env
-ok    cache root                 /home/lap/nawat/cache
+ok    configuration              /home/you/nawat/.env
+ok    cache root                 /home/you/nawat/cache
 ok    cache ceiling              120 GB ceiling + 10.0 GB reserve on a 250 GB filesystem
 ok    object storage reachable   http://192.168.0.155:9000 · bucket ai-model
 ok    object storage round trip  write, list, verify and delete all succeeded
 
 Ready. Object storage is reachable and this host can publish, verify and reclaim.
+```
+
+**4. Pull something in.** The first fetch goes to Hugging Face and writes through
+to your store on the way past; every later one — including after the local copy
+is evicted — comes from your store.
+
+```bash
+nawat resolve models/unsloth/Qwen3.5-0.8B     # prints the local path
+nawat status                                  # what that cost you
+```
+
+**5. Train.** Either open
+[examples/latex_ocr_qwen3_5_vision.ipynb](examples/latex_ocr_qwen3_5_vision.ipynb)
+and run the cells, or submit the script version. Submitted scripts live in the
+workspace — `~/nawat/workspace` by default, `NAWAT_WORKSPACE` to move it — and
+anything outside it is refused, so copy it in first:
+
+```bash
+cp examples/train_latex_ocr.py ~/nawat/workspace/
+nawat submit train_latex_ocr.py \
+  --model   models/unsloth/Qwen3.5-0.8B \
+  --dataset datasets/unsloth/LaTeX_OCR \
+  --param   max_steps=60
+```
+
+**6. Watch it.** From any other shell, at any time:
+
+```bash
+nawat runs                 # history, newest first
+nawat logs    <id> -f      # the trainer's output, live
+nawat metrics <id> -f      # the loss trace as a terminal chart, live
+```
+
+**7. Use the result.** Serve the base once and hot-load the adapter onto it —
+seconds, no merge:
+
+```bash
+nawat serve models/unsloth/Qwen3.5-0.8B
+nawat adapter runs/<id>/adapter --name latex-ocr
+nawat session --stop
 ```
 
 ## Keys
@@ -375,6 +475,79 @@ swapping adapters at runtime makes testing effectively free.
 
 ---
 
+## Exports: merged FP16 and GGUF
+
+Not everything can load an adapter. `llama.cpp`, Ollama and most edge runtimes
+want one self-contained file, which means merging the LoRA back into the base and
+converting the result. Both outputs are roughly the size of the base model, and
+on an ordinary setup both accumulate forever, because nothing ever decides they
+can go.
+
+Here they are artifact classes like any other: written into the run's output
+directory, published and verified on success, then reclaimed from local disk.
+
+```python
+# GGUF conversion consumes merged weights, so it implies this step:
+model.save_pretrained_merged(str(run.artifact_dir("merged")), tokenizer)
+
+model.save_pretrained_gguf(
+    str(run.artifact_dir("gguf")), tokenizer,
+    quantization_method = "q4_k_m",        # or "q8_0", "q5_k_m", "f16"
+)
+run.finish()                               # → runs/<id>/merged, runs/<id>/gguf
+```
+
+Several quantizations at once is far cheaper than one at a time — llama.cpp is
+built and the FP16 intermediate produced once, not once per format:
+
+```python
+model.save_pretrained_gguf(str(run.artifact_dir("gguf")), tokenizer,
+                           quantization_method = ["q4_k_m", "q5_k_m", "q8_0"])
+```
+
+Pass `str(...)`: Unsloth's `save_pretrained_*` join paths as text, and a `Path`
+trips them up.
+
+**When it refuses.** GGUF conversion asks llama.cpp to recognise the
+architecture, and support for vision encoders lags well behind support for text
+models. If it fails, that is llama.cpp's answer, not something Nawāt can work
+around — so guard it and let the run keep what it already earned:
+
+```python
+try:
+    model.save_pretrained_gguf(str(run.artifact_dir("gguf")), tokenizer,
+                               quantization_method = "q4_k_m")
+except Exception as exc:
+    run.log(f"gguf conversion failed: {exc}")   # adapter and merged still publish
+```
+
+An artifact directory left empty is skipped rather than published, so a failed
+conversion leaves no trace but the log line.
+
+**Using one later.** It is in object storage, not on your disk. `nawat resolve`
+brings it back, making room first if the ceiling requires it:
+
+```bash
+llama-cli -m "$(nawat resolve runs/<id>/gguf)"/*.gguf -p "..."
+
+# Promote it to a named deployment artifact, separate from the run that made it:
+nawat publish "$(nawat resolve runs/<id>/gguf)" exports/latex-ocr-q4
+nawat keep exports/latex-ocr-q4        # exempt it from reclamation
+
+# Ollama:
+printf 'FROM %s\n' "$(nawat resolve exports/latex-ocr-q4)"/*.gguf > Modelfile
+ollama create latex-ocr -f Modelfile
+```
+
+In the submitted script the exports are behind a parameter, off by default:
+
+```bash
+nawat submit train_latex_ocr.py --model ... --dataset ... \
+  --param export=gguf --param quantization=q4_k_m
+```
+
+---
+
 ## Commands
 
 | Command | What it does |
@@ -463,10 +636,62 @@ nawat agent "the run OOMed at step 40; halve the memory it needs" --run <id>
 - Each artifact directory carries a `.nawat-artifact.json` marker, so the cache
   describes itself on disk — delete the state database and it rebuilds.
 
+## Running it as a service
+
+`nawat api` in the foreground is enough to try. To keep it up, a unit file of
+about ten lines:
+
+```ini
+# /etc/systemd/system/nawat-api.service
+[Unit]
+Description=Nawat control plane
+After=network-online.target
+
+[Service]
+User=you
+WorkingDirectory=/home/you/nawat
+ExecStart=/home/you/nawat/.venv/bin/nawat api
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Recovery is unattended by design, so there is nothing to do after a reboot: the
+cache reconciles against what is actually on disk, leases from before the boot
+are cleared (they carry the boot id), and runs that did not survive are marked
+failed rather than left claiming to be running.
+
+**What breaks, and what happens.**
+
+| Situation | What happens | What you do |
+| --- | --- | --- |
+| Host reboot | Cache reconciles, stale leases cleared, interrupted runs marked failed | Nothing |
+| Trainer crashes | Exit code recorded, log kept locally and in `runs/<id>/record` | `nawat logs <id>` |
+| Object store down | **Nothing is evicted** — verification cannot complete, so deletion is refused. Fetches and publishes fail naming the endpoint; a run already training continues | Restore the store, then `nawat publish` |
+| State database lost | Cache rebuilds from the `.nawat-artifact.json` marker in each artifact; run history rebuilds from `run.json` | `nawat status` triggers it |
+| Disk filling | `nawat status` and `GET /health` both warn at 90% of the ceiling | `nawat free --need 20GB`, or raise the ceiling |
+
+**The one state where data loss is possible** is an artifact that exists only on
+this disk — a publish that failed, or something added but never uploaded.
+`nawat status` reports it as *N GB exists only on this disk*, and `nawat ls`
+flags it. Everything else is replicated by definition, because nothing is deleted
+until its replica is verified.
+
+**Security.** The API binds loopback only; put a reverse proxy in front of it
+rather than binding wider. Set `NAWAT_API_TOKEN` before exposing it at all —
+`/health` stays open for monitoring, everything else then needs the bearer token.
+Credentials live in `.env` and never reach a log, a run record or an API
+response; `nawat config` prints `"set"` in their place. Training scripts run with
+your privileges and are not sandboxed, so do not point it at code you would not
+run yourself.
+
 ## Tests
 
 ```bash
-.venv/bin/pip install -e ".[dev]" && .venv/bin/python -m pytest
+git clone https://github.com/murtadha-lap/nawat.git && cd nawat
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,hub]"
+.venv/bin/python -m pytest
 ```
 
 The eviction tests are a release gate: unreplicated, kept, in-use and
@@ -482,3 +707,27 @@ no GPU needed to run the suite.
   checksums would catch silent corruption at the cost of reading every byte back.
 - vLLM must support the architecture being served; adapter hot-load requires the
   vLLM backend.
+
+## Licence
+
+[PolyForm Noncommercial License 1.0.0](LICENSE) — free for anyone to use, study,
+modify and share, for any **noncommercial** purpose. Research, teaching, personal
+projects, hobby work, and use by charities, schools, universities, public research
+bodies and government all count as permitted, whatever their funding.
+
+Commercial use is not granted. If you want it, ask.
+
+Two things to be clear about:
+
+- **This is not an open-source licence** in the OSI sense, which forbids
+  restrictions on the field of use. GitHub will not show it as a recognised
+  open-source licence, and it is incompatible with GPL-family code. That is the
+  price of the noncommercial condition, not an oversight.
+- **The examples are LGPL-3.0, not this.** `examples/latex_ocr_qwen3_5_vision.ipynb`
+  and `examples/train_latex_ocr.py` are derived from Unsloth's notebook, which is
+  LGPL-3.0, and that licence does not permit adding a noncommercial restriction
+  downstream. They therefore stay under LGPL-3.0 and may be used commercially on
+  its terms — see [examples/LICENSE](examples/LICENSE).
+
+Nawāt does not bundle Unsloth, vLLM or llama.cpp; each is installed separately
+under its own licence.

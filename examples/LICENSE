@@ -1,0 +1,34 @@
+# Licensing of the examples
+
+The rest of this repository is under the PolyForm Noncommercial License 1.0.0
+(see [../LICENSE](../LICENSE)). **These two files are not**, and cannot be:
+
+- `latex_ocr_qwen3_5_vision.ipynb`
+- `train_latex_ocr.py`
+
+Both are derived from Unsloth's Qwen3.5-0.8B vision fine-tuning notebook, which
+Unsloth publishes under the **GNU Lesser General Public License v3.0**:
+
+> This notebook and all Unsloth notebooks are licensed LGPL-3.0
+> — <https://github.com/unslothai/notebooks?tab=LGPL-3.0-1-ov-file#readme>
+
+They keep substantial parts of that original — the installation cell, the
+conversation-formatting function, the trainer configuration, the inference and
+memory-statistics cells, and much of the prose. That makes them derivative works,
+and LGPL-3.0 does not permit adding restrictions such as a noncommercial clause
+to a work derived from it.
+
+**So these two files remain under LGPL-3.0**, and you may use them commercially
+on LGPL-3.0's terms, whatever the licence on the rest of the repository says.
+
+The changes made to them — the `nawat` calls that replace the repo ids, output
+paths and hyperparameters, and the commentary explaining why — are contributed
+under LGPL-3.0 as well, so the files stay usable as a whole.
+
+Nothing here restricts Unsloth itself: it is a separate work, installed
+separately, under its own licence.
+
+---
+
+*Not legal advice. If the boundary between the two licences matters to you
+commercially, have a lawyer look at it.*
