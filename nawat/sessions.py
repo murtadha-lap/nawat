@@ -133,7 +133,9 @@ class ServingBackend:
     name = "backend"
     supports_adapters = False
 
-    def command(self, *, model_path: Path, model_name: str, port: int, extra: list[str]) -> list[str]:
+    def command(
+        self, *, model_path: Path, model_name: str, host: str, port: int, extra: list[str]
+    ) -> list[str]:
         raise NotImplementedError
 
     def environment(self) -> dict[str, str]:
@@ -154,7 +156,9 @@ class VLLMBackend(ServingBackend):
     name = "vllm"
     supports_adapters = True
 
-    def command(self, *, model_path: Path, model_name: str, port: int, extra: list[str]) -> list[str]:
+    def command(
+        self, *, model_path: Path, model_name: str, host: str, port: int, extra: list[str]
+    ) -> list[str]:
         return [
             "vllm",
             "serve",
@@ -164,7 +168,7 @@ class VLLMBackend(ServingBackend):
             "--port",
             str(port),
             "--host",
-            "127.0.0.1",
+            host,
             "--enable-lora",
             *extra,
         ]
@@ -314,7 +318,11 @@ class SessionManager:
         if not extra and self.config.serve_extra_args:
             extra = self.config.serve_extra_args.split()
         command = self.backend.command(
-            model_path=path, model_name=str(model), port=session.port, extra=extra
+            model_path=path,
+            model_name=str(model),
+            host=self.config.serve_host,
+            port=session.port,
+            extra=extra,
         )
         env = {
             **self.backend.environment_defaults(),

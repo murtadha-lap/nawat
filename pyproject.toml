@@ -24,7 +24,6 @@ Issues = "https://github.com/murtadha-lap/nawat/issues"
 
 [project.optional-dependencies]
 hub = ["huggingface_hub>=0.23"]
-agent = ["claude-agent-sdk>=0.2"]
 api = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "httpx>=0.27"]
 notebook = ["huggingface_hub>=0.23", "matplotlib>=3.8"]
 

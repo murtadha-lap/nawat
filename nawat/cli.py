@@ -543,11 +543,43 @@ def _sessions(cache: Cache):
     return SessionManager(cache, runs=_run_store(cache))
 
 
+def _primary_address() -> str | None:
+    """This host's address on the interface carrying its default route."""
+    import socket
+
+    # Connecting a UDP socket only selects a route; nothing is sent, and the
+    # destination is reserved for documentation so it cannot be mistaken for
+    # real traffic.
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        try:
+            sock.connect(("192.0.2.0", 9))
+            return sock.getsockname()[0]
+        except OSError:
+            return None
+
+
+def _reachable_url(cache: Cache, port: int) -> str | None:
+    """The URL other machines use, or None when the server is loopback-only.
+
+    ``base_url`` stays on loopback because that is what Nawāt itself talks to;
+    this is only for telling the researcher where the server actually answers.
+    """
+    host = cache.config.serve_host
+    if host in ("", "127.0.0.1", "localhost", "::1"):
+        return None
+    if host in ("0.0.0.0", "::"):
+        host = _primary_address() or host
+    return f"http://{host}:{port}/v1"
+
+
 def cmd_serve(cache: Cache, args) -> int:
     manager = _sessions(cache)
     _err(f"Starting an inference server for {args.key} — this takes a minute for a large base.")
     session = manager.start(args.key, idle_timeout=args.idle_timeout, wait=not args.no_wait)
     print(f"Serving {session.model} at {session.base_url}/v1 ({session.state.value}).")
+    reachable = _reachable_url(cache, session.port)
+    if reachable:
+        print(f"Reachable on this network at {reachable} — vLLM does not authenticate callers.")
     print(f"Idle timeout {human_age(session.idle_timeout)}; the GPU is released after that.")
     return 0
 
@@ -572,6 +604,9 @@ def cmd_session(cache: Cache, args) -> int:
     print(f"model      {session.model}")
     print(f"state      {session.state.value}")
     print(f"url        {session.base_url}/v1")
+    reachable = _reachable_url(cache, session.port)
+    if reachable:
+        print(f"network    {reachable}")
     print(f"pid        {session.pid}")
     print(f"idle for   {human_age(session.idle_for)} of {human_age(session.idle_timeout)}")
     for name, key in session.adapters.items():
@@ -592,70 +627,6 @@ def cmd_adapter(cache: Cache, args) -> int:
     loaded = args.name or Key.parse(args.key).path.replace("/", "-")
     print(f"Loaded {args.key} as {loaded}; no merge, no restart.")
     print(f"Use it by setting model={loaded} against {session.base_url}/v1.")
-    return 0
-
-
-def cmd_agent(cache: Cache, args) -> int:
-    """Propose, review, approve — the agent never touches the workspace alone."""
-    from .agent import Agent, build_backend
-
-    if not args.backend:
-        backend = build_backend(workspace=cache.config.workspace_root)
-    elif args.backend.startswith("http"):
-        from .agent import OpenAICompatBackend
-
-        backend = OpenAICompatBackend(args.backend, os.environ.get("NAWAT_AGENT_MODEL", "default"))
-    else:
-        backend = build_backend({**os.environ, "NAWAT_AGENT_BACKEND": args.backend},
-                                workspace=cache.config.workspace_root)
-    agent = Agent(cache, _run_store(cache), backend)
-
-    _err(f"Asking {agent.backend.name}…")
-    proposal = agent.propose(args.instruction, script=args.script, run_id=args.target_run)
-
-    print(f"\n{proposal.summary}\n")
-    print(proposal.diff or "(a new file; no previous content)")
-    for warning in proposal.warnings:
-        _err(f"\n⚠ {warning}")
-
-    if not args.yes:
-        if not sys.stdin.isatty():
-            _err("\nNot a terminal, so nothing was applied. Re-run with --yes to accept this diff.")
-            return 0
-        answer = input("\nApply this to the workspace? [y/N] ").strip().lower()
-        if answer != "y":
-            print("Left untouched.")
-            return 0
-    commit = agent.apply(proposal)
-    print(f"Applied and committed as {commit}.")
-
-    if args.resubmit and args.target_run:
-        from .runs import RunSpec
-
-        record = _run_store(cache).get(args.target_run)
-        params = dict(record.spec.params)
-        if args.dry_run:
-            params["max_steps"] = "3"
-        spec = RunSpec(script=proposal.path, model=record.spec.model, datasets=record.spec.datasets,
-                       inputs=record.spec.inputs, params=params,
-                       notes=f"agent revision of {args.target_run}" + (" (dry run)" if args.dry_run else ""))
-        executor = _executor(cache)
-        executor.validate(spec)
-        new_record = executor.runs.create(spec)
-        print(f"Resubmitted as run {new_record.id}" + (" with max_steps=3 for a dry run." if args.dry_run else "."))
-        finished = executor.execute(new_record.id)
-        print(f"run {finished.id} {finished.state.value}.")
-        return 0 if finished.state.value == "succeeded" else 1
-    return 0
-
-
-def cmd_describe(cache: Cache, args) -> int:
-    from .agent import Agent
-
-    agent = Agent(cache, _run_store(cache))
-    description = agent.describe_run(args.run_id)
-    print(description)
-    _err("\nStored in the run record.")
     return 0
 
 
@@ -948,20 +919,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--name", help="what to call it when requesting completions")
     p.add_argument("--unload", metavar="NAME")
     p.set_defaults(run=cmd_adapter)
-
-    p = sub.add_parser("agent", help="propose a training-script change; nothing applies without approval")
-    p.add_argument("instruction", help="what to write or fix, in plain language")
-    p.add_argument("--script", help="the script to work on (workspace-relative)")
-    p.add_argument("--run", dest="target_run", help="a run to diagnose; its log and metrics join the context")
-    p.add_argument("--backend", help="local|claude|codex, or an OpenAI-compatible URL")
-    p.add_argument("--yes", action="store_true", help="apply without the interactive prompt")
-    p.add_argument("--resubmit", action="store_true", help="after applying, resubmit the diagnosed run's spec")
-    p.add_argument("--dry-run", action="store_true", help="resubmit with max_steps=3 to validate cheaply first")
-    p.set_defaults(run=cmd_agent)
-
-    p = sub.add_parser("describe", help="store a plain-language description of a run in its record")
-    p.add_argument("run_id")
-    p.set_defaults(run=cmd_describe)
 
     p = sub.add_parser("estimate", help="will it fit? VRAM estimate for a training configuration")
     p.add_argument("--model", metavar="KEY")

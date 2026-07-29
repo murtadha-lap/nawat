@@ -130,7 +130,7 @@ def estimate(
     )
 
 
-#: Trainer kwargs an agent proposal is scanned for, so an unrunnable one is
+#: Trainer kwargs a proposed training script is scanned for, so an unrunnable one is
 #: flagged before it reaches review.
 _KWARG = {
     "batch": re.compile(r"per_device_train_batch_size\s*=\s*(\d+)"),
