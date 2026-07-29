@@ -80,6 +80,33 @@ def test_health_needs_no_token_so_monitoring_works(secured):
     assert secured.get("/health").status_code == 200
 
 
+# -- the index and health ----------------------------------------------------
+
+
+def test_the_root_names_the_service_and_its_schema(client):
+    """There is no bundled interface; the root says where the contract is."""
+    index = client.get("/").json()
+    assert index["name"] == "nawat"
+    assert index["docs"] == "/docs" and index["openapi"] == "/openapi.json"
+    assert client.get("/openapi.json").status_code == 200
+
+
+def test_health_carries_the_readings_monitoring_needs(client):
+    health = client.get("/health").json()
+    assert "gpu" in health
+    assert "warnings" in health and isinstance(health["warnings"], list)
+    assert "cache" in health and "fraction" in health["cache"]
+
+
+def test_storage_pressure_warnings_name_the_condition(cache, cached):
+    from nawat.api import storage_warnings
+
+    cached("runs/x/adapter", 45 * 10**6, replicated=False)
+    warnings = storage_warnings(cache.status())
+    assert any("% of its ceiling" in w for w in warnings)
+    assert any("only on this disk" in w for w in warnings)
+
+
 def test_the_token_never_appears_in_config(secured):
     config = secured.get("/config", headers={"Authorization": "Bearer a-long-random-token"}).json()
     assert config["api_token"] == "set"

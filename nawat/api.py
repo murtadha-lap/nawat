@@ -16,7 +16,6 @@ import contextlib
 import json
 import os
 import time
-from pathlib import Path
 from typing import Any, AsyncIterator, Iterator
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
@@ -361,7 +360,7 @@ def create_app(
 
     @app.get("/runs/{run_id}/log/stream", dependencies=guard)
     def stream_log(run_id: str) -> StreamingResponse:
-        """Server-sent events, so the UI shows a run as it happens (FR-2.6)."""
+        """Server-sent events, so a client sees a run as it happens (FR-2.6)."""
         platform.runs.get(run_id)
 
         def events() -> Iterator[bytes]:
@@ -582,18 +581,24 @@ def create_app(
             media_type=response.headers.get("content-type"),
         )
 
-    # -- the interface -----------------------------------------------------
+    # -- the index ---------------------------------------------------------
 
-    ui_dir = Path(__file__).parent / "ui"
-    if ui_dir.is_dir():
-        from fastapi.responses import RedirectResponse
-        from fastapi.staticfiles import StaticFiles
+    @app.get("/", include_in_schema=False)
+    def index() -> dict[str, Any]:
+        """What this is and where its documentation lives.
 
-        app.mount("/ui", StaticFiles(directory=str(ui_dir), html=True), name="ui")
+        There is no bundled interface: the clients are the CLI, the Python
+        library, and this schema.
+        """
+        from . import __version__
 
-        @app.get("/", include_in_schema=False)
-        def index() -> RedirectResponse:
-            return RedirectResponse(url="/ui/")
+        return {
+            "name": "nawat",
+            "version": __version__,
+            "docs": "/docs",
+            "openapi": "/openapi.json",
+            "health": "/health",
+        }
 
     return app
 

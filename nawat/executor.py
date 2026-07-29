@@ -49,7 +49,7 @@ RECORD_CLASS = "record"
 _ENV_NAME = re.compile(r"[^A-Z0-9]+")
 
 
-def _param_env_name(name: str) -> str:
+def param_env_name(name: str) -> str:
     return "NAWAT_PARAM_" + _ENV_NAME.sub("_", name.upper()).strip("_")
 
 
@@ -61,6 +61,74 @@ class Plan:
     command: list[str]
     out_dir: Path
     inputs: dict[str, Path]
+
+
+# -- publication --------------------------------------------------------------
+#
+# Free functions rather than methods, because a run driven from a notebook
+# kernel (see :mod:`nawat.notebook`) has no subprocess and therefore no
+# Executor, and must still publish byte-for-byte identically: same artifact
+# classes, same keys, same verified-then-reclaimed order.
+
+
+def run_output_dir(config, run_id: str) -> Path:
+    """The run's own directory in the cache, where artifact classes are written."""
+    return config.cache_root / "runs" / run_id
+
+
+def publish_outputs(cache: Cache, run_id: str, out_dir: Path) -> list[str]:
+    """Publish each artifact class the run produced, then reclaim the disk."""
+    published: list[str] = []
+    if not out_dir.exists():
+        return published
+
+    loose = [entry for entry in out_dir.iterdir() if entry.is_file() and not entry.name.startswith(".nawat")]
+    if loose:
+        staging = out_dir / LOOSE_OUTPUT
+        staging.mkdir(exist_ok=True)
+        for entry in loose:
+            entry.rename(staging / entry.name)
+
+    for entry in sorted(out_dir.iterdir()):
+        if not entry.is_dir() or entry.name.startswith(".nawat"):
+            continue
+        if not any(entry.rglob("*")):
+            continue
+        key = Key.parse(f"runs/{run_id}/{entry.name}")
+        cache.publish(entry, key)
+        published.append(str(key))
+    prune_empty(out_dir)
+    return published
+
+
+def publish_record(cache: Cache, runs: RunStore, run_id: str) -> None:
+    """Copy the log, metrics and record into object storage.
+
+    A copy, because the local originals stay put: they live in the state
+    directory rather than the cache, so nothing reclaims them and a failed run
+    stays readable (FR-2.11).
+    """
+    directory = runs.directory(run_id)
+    sources = [path for path in directory.iterdir() if path.is_file() and path.name != CANCEL_SENTINEL]
+    if not sources:
+        return
+    with tempfile.TemporaryDirectory(dir=str(cache.config.staging_root)) as scratch:
+        for path in sources:
+            shutil.copy2(path, Path(scratch) / path.name)
+        try:
+            cache.store.publish(Path(scratch), Key.parse(f"runs/{run_id}/{RECORD_CLASS}"))
+        except NawatError:
+            # Losing the replica of a log must not turn a successful run into a
+            # failed one; the local copy is still there.
+            pass
+
+
+def prune_empty(directory: Path) -> None:
+    try:
+        if directory.exists() and not any(directory.iterdir()):
+            directory.rmdir()
+    except OSError:
+        pass
 
 
 class Executor:
@@ -132,8 +200,7 @@ class Executor:
         return Plan(script=script, command=command, out_dir=out_dir, inputs=inputs)
 
     def output_dir(self, run_id: str) -> Path:
-        """The run's own directory in the cache, where artifact classes are written."""
-        return self.config.cache_root / "runs" / run_id
+        return run_output_dir(self.config, run_id)
 
     def environment(self, record: RunRecord, plan: Plan) -> dict[str, str]:
         """Configuration for the training script, injected not embedded (FR-2.4)."""
@@ -165,7 +232,7 @@ class Executor:
             env["NAWAT_DATASET_DIR"] = plan.inputs[str(spec.datasets[0])]
             env["NAWAT_DATASET_DIRS"] = json.dumps([plan.inputs[str(k)] for k in spec.datasets])
         for name, value in spec.params.items():
-            env[_param_env_name(name)] = str(value)
+            env[param_env_name(name)] = str(value)
         return env
 
     # -- execution ---------------------------------------------------------
@@ -270,57 +337,10 @@ class Executor:
     # -- publication -------------------------------------------------------
 
     def _publish_outputs(self, record: RunRecord, plan: Plan) -> list[str]:
-        """Publish each artifact class the script produced, then reclaim the disk."""
-        published: list[str] = []
-        out_dir = plan.out_dir
-        if not out_dir.exists():
-            return published
-
-        loose = [entry for entry in out_dir.iterdir() if entry.is_file() and not entry.name.startswith(".nawat")]
-        if loose:
-            staging = out_dir / LOOSE_OUTPUT
-            staging.mkdir(exist_ok=True)
-            for entry in loose:
-                entry.rename(staging / entry.name)
-
-        for entry in sorted(out_dir.iterdir()):
-            if not entry.is_dir() or entry.name.startswith(".nawat"):
-                continue
-            if not any(entry.rglob("*")):
-                continue
-            key = Key.parse(f"runs/{record.id}/{entry.name}")
-            self.cache.publish(entry, key)
-            published.append(str(key))
-        self._prune(out_dir)
-        return published
+        return publish_outputs(self.cache, record.id, plan.out_dir)
 
     def _publish_record(self, record: RunRecord) -> None:
-        """Copy the log and the record into object storage.
-
-        A copy, because the local originals stay put: they live in the state
-        directory rather than the cache, so nothing reclaims them and a failed
-        run stays readable (FR-2.11).
-        """
-        directory = self.runs.directory(record.id)
-        sources = [path for path in directory.iterdir() if path.is_file() and path.name != CANCEL_SENTINEL]
-        if not sources:
-            return
-        with tempfile.TemporaryDirectory(dir=str(self.config.staging_root)) as scratch:
-            for path in sources:
-                shutil.copy2(path, Path(scratch) / path.name)
-            try:
-                self.cache.store.publish(Path(scratch), Key.parse(f"runs/{record.id}/{RECORD_CLASS}"))
-            except NawatError:
-                # Losing the replica of a log must not turn a successful run
-                # into a failed one; the local copy is still there.
-                pass
-
-    def _prune(self, directory: Path) -> None:
-        try:
-            if directory.exists() and not any(directory.iterdir()):
-                directory.rmdir()
-        except OSError:
-            pass
+        publish_record(self.cache, self.runs, record.id)
 
     # -- cancellation ------------------------------------------------------
 

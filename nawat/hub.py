@@ -8,12 +8,39 @@ rather than a silent download.
 
 from __future__ import annotations
 
+import contextlib
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Iterator
 
 from .config import Config
 from .errors import NotFound, Offline
 from .keys import Key
+
+#: Variables a training process sets to forbid itself from downloading. A run
+#: under the executor gets them in its environment; a notebook kernel gets them
+#: from :mod:`nawat.notebook`.
+OFFLINE_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE")
+
+
+@contextlib.contextmanager
+def sanctioned_download() -> Iterator[None]:
+    """Lift the caller's own offline switches for the duration of one fetch.
+
+    The switches exist so that *training code* cannot download: an input that
+    was not declared and staged must fail loudly rather than arrive silently.
+    This function is the one path they are not meant to block — it writes
+    through to object storage, so the artifact is fetched once and accounted
+    for. Nothing else in the process gets the exemption.
+    """
+    saved = {name: os.environ.pop(name, None) for name in OFFLINE_VARS}
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is not None:
+                os.environ[name] = value
 
 
 class Hub(ABC):
@@ -73,7 +100,8 @@ class HuggingFaceHub(Hub):
         if not repo_id:
             return None
         try:
-            info = self._api().repo_info(repo_id, repo_type=self._repo_type(key), files_metadata=True)
+            with sanctioned_download():
+                info = self._api().repo_info(repo_id, repo_type=self._repo_type(key), files_metadata=True)
         except Offline:
             raise
         except Exception:
@@ -98,13 +126,14 @@ class HuggingFaceHub(Hub):
                 "Install it with: pip install huggingface_hub — or seed the artifact into object storage directly.",
             ) from exc
         dest.mkdir(parents=True, exist_ok=True)
-        snapshot_download(
-            repo_id=repo_id,
-            repo_type=self._repo_type(key),
-            local_dir=str(dest),
-            token=self.token,
-            max_workers=8,
-        )
+        with sanctioned_download():
+            snapshot_download(
+                repo_id=repo_id,
+                repo_type=self._repo_type(key),
+                local_dir=str(dest),
+                token=self.token,
+                max_workers=8,
+            )
 
 
 def build_hub(config: Config) -> Hub:

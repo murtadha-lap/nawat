@@ -1,6 +1,6 @@
 """The cache CLI.
 
-Usable standalone, with no API or UI running (NFR-3.5), and sharing one
+Usable standalone, with no API running (NFR-3.5), and sharing one
 implementation with everything else that touches the cache (FR-1.11).
 
 Commands are named for what the researcher controls rather than for how the
@@ -983,7 +983,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--label", help="name for this evaluation in the record")
     p.set_defaults(run=cmd_eval)
 
-    p = sub.add_parser("api", help="run the control plane and web interface")
+    p = sub.add_parser("api", help="run the control plane over HTTP")
     p.set_defaults(run=cmd_api)
 
     p = sub.add_parser("lab", help="JupyterLab in the workspace, sharing the cache")

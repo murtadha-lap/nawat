@@ -33,7 +33,7 @@ probe object. Reachable-but-cannot-delete credentials fail here, not mid-run.
 | --- | --- | --- |
 | Host reboot | Both services restart via systemd. Nawāt reconciles the cache against disk, clears leases from before the boot, and marks interrupted runs failed. | None |
 | Control plane crash mid-run | systemd restarts it; the orphaned trainer's lease dies with its process; the run record is marked failed with "did not survive a restart". Outputs stay on disk for inspection. | Resubmit the run |
-| Trainer crash | Exit code recorded, run failed, log kept locally and in `runs/<id>/record`. | `nawat logs <id>`, or Diagnose in the UI |
+| Trainer crash | Exit code recorded, run failed, log kept locally and in `runs/<id>/record`. | `nawat logs <id>`, then `nawat agent --run <id>` to diagnose |
 | Inference server dies | The session record notices the dead pid, the weights' lease is released, the cache may reclaim them. | `nawat serve <model>` again |
 | RustFS down | Nothing is evicted (verification cannot complete); fetches and publishes fail with the endpoint named. Runs already training continue; publish fails at the end and outputs stay local. | Restore RustFS, re-run `nawat publish` |
 | State database lost | The cache rebuilds from `.nawat-artifact.json` markers on disk; run history rebuilds from `run.json` files. Leases and pins are lost — pins must be re-applied. | `nawat status` triggers recovery |
@@ -69,15 +69,15 @@ trainer checkpoints (outside the cache, in /tmp)  budget NAWAT_MIN_FREE for it
 ```
 
 On the 233 GB NVMe: `NAWAT_CACHE_CEILING=120GB`, `NAWAT_MIN_FREE=10GB` leaves
-~100 GB for the OS, the venv and tempfile scratch. Watch the strip in the UI:
+~100 GB for the OS, the venv and tempfile scratch. Watch `nawat status`:
 sustained >90% occupancy with frequent evictions means the ceiling is too low
 for the working set — raise it or trim the set.
 
 ## Storage-pressure signals
 
-Surfaced in three places, same thresholds: `nawat status` (stderr warnings),
+Surfaced in two places, same thresholds: `nawat status` (stderr warnings) and
 `GET /health` (`warnings` array — point external monitoring here; it needs no
-token), and the UI status strip.
+token).
 
 - *cache at N% of its ceiling* — eviction is imminent; fine if replicated.
 - *N GB exists only on this disk* — unreplicated artifacts; the one state in
@@ -106,7 +106,7 @@ against object storage like any artifact.
 - Set `NAWAT_API_TOKEN` before binding beyond loopback; `/health` stays open
   for monitoring, everything else then requires the bearer token (NFR-4.2).
 - Credentials live in `.env` (gitignored) and are never written to logs, run
-  records or the UI; `nawat config` shows `"set"` in their place (NFR-4.1).
+  records or API responses; `nawat config` shows `"set"` in their place (NFR-4.1).
 - Training scripts run with the submitting user's privileges. There is no
   sandbox; do not point the platform at untrusted scripts (NFR-4.4).
 - The optional agent backend receives training code and run metrics only.

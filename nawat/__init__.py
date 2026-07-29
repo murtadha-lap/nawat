@@ -11,6 +11,22 @@ Inside a notebook or a training script the whole cache is one import (FR-3.2)::
 
 Both leases and the cache ceiling are handled underneath; the script never
 names a byte count or deletes a file.
+
+For a notebook that should also leave a run record — the provenance a submitted
+script gets for free — open a run instead, and the staging, leasing, metric
+series and verified publish happen around your cells::
+
+    run = nawat.begin_run(
+        model   = "models/unsloth/Qwen3.5-0.8B",
+        dataset = "datasets/unsloth/LaTeX_OCR",
+        params  = {"max_steps": 30},
+    )
+    model, tokenizer = FastVisionModel.from_pretrained(run.model_dir)
+    ...
+    model.save_pretrained(run.artifact_dir("adapter"))
+    run.finish()
+
+See :mod:`nawat.notebook`.
 """
 
 from __future__ import annotations
@@ -19,6 +35,7 @@ import threading
 from pathlib import Path
 from typing import Iterator
 
+from . import metrics
 from .cache import ArtifactStatus, Cache, CacheStatus, CollectResult, PublishResult, open_cache
 from .config import Config
 from .errors import (
@@ -32,6 +49,20 @@ from .errors import (
     VerificationFailed,
 )
 from .keys import KINDS, Key
+from .notebook import (
+    Run,
+    artifact_dir,
+    begin_run,
+    current_run,
+    dataset_dir,
+    history,
+    model_dir,
+    out_dir,
+    param,
+    run_id,
+    run_record,
+    trace,
+)
 from .store import VerificationResult
 from .units import human_bytes, parse_size
 
@@ -114,22 +145,35 @@ __all__ = [
     "Offline",
     "Protected",
     "PublishResult",
+    "Run",
     "StoreUnavailable",
     "VerificationFailed",
     "VerificationResult",
     "__version__",
+    "artifact_dir",
     "artifacts",
+    "begin_run",
+    "current_run",
+    "dataset_dir",
     "default_cache",
     "free_space",
+    "history",
     "holding",
     "human_bytes",
     "keep",
+    "metrics",
+    "model_dir",
     "open_cache",
+    "out_dir",
+    "param",
     "parse_size",
     "publish",
     "release",
     "resolve",
+    "run_id",
+    "run_record",
     "status",
+    "trace",
     "use_cache",
     "verify",
 ]
