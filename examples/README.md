@@ -8,18 +8,18 @@ the experiment is worth six hours.
 | [latex_ocr_qwen3_5_vision.ipynb](latex_ocr_qwen3_5_vision.ipynb) | The Unsloth vision notebook — Qwen3.5-0.8B on `unsloth/LaTeX_OCR` — driven from a kernel as a recorded run |
 | [train_latex_ocr.py](train_latex_ocr.py) | The same body as a script, for `nawat submit` |
 
-Both need Nawāt installed and configured first:
+Neither has an install cell. Set the environment up once —
+[Installation](../README.md#installation) covers Nawāt, Unsloth and the training
+stack — then configure the store:
 
 ```bash
-uv pip install "nawat[notebook] @ git+https://github.com/murtadha-lap/nawat.git"
 cp .env.example .env && $EDITOR .env      # endpoint, bucket, credentials, ceiling
 nawat check --create-bucket
 ```
 
-Unsloth is not a dependency of Nawāt — install it however you normally do. The
-notebook's first cell will do it for you, but only when `unsloth` does not
-already import: on a workstation you pay for that once, not once per session.
-Force an upgrade with `NAWAT_FORCE_REINSTALL=1`.
+After that the notebook opens and runs. Its first cell is a preflight: it reports
+the versions it found and the GPU it is on, and stops with a clear message rather
+than a deep `ImportError` if something is missing.
 
 ## The three changed lines
 
