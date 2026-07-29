@@ -435,13 +435,51 @@ vllm --version
 Optional `.env` settings for a 16 GB GPU:
 
 ```dotenv
+NAWAT_SERVE_HOST=127.0.0.1
 NAWAT_SERVE_PORT=8001
 NAWAT_SERVE_STARTUP_TIMEOUT=600
 NAWAT_SERVE_IDLE_TIMEOUT=900
 NAWAT_SERVE_EXTRA_ARGS=--gpu-memory-utilization 0.85 --max-model-len 4096
 ```
 
-### 2. Start the matching base
+### 2. Reaching the server from another machine
+
+`NAWAT_SERVE_HOST` defaults to `127.0.0.1`, so the server answers only on this
+workstation. Set it to `0.0.0.0` to bind every interface, and `nawat serve` and
+`nawat session` will then also print the address other machines should use:
+
+```dotenv
+NAWAT_SERVE_HOST=0.0.0.0
+```
+
+Unlike the control plane, vLLM checks no credential of its own — once bound to
+`0.0.0.0`, anything that can route to the port can spend your GPU and load
+adapters. Restrict the port to the subnet you trust:
+
+```bash
+sudo ufw allow from 192.168.0.0/24 to any port 8001 proto tcp
+```
+
+Do not reach for vLLM's `--api-key` here. It guards every path under `/v1`,
+which is where Nawāt sends its own `load_lora_adapter` and `unload_lora_adapter`
+calls without a bearer token, so a key breaks `nawat adapter` and the control
+plane's `/v1` passthrough.
+
+For an exposed endpoint that *is* authenticated, leave the server on loopback
+and publish the control plane instead — it proxies `/v1` behind
+`NAWAT_API_TOKEN`:
+
+```dotenv
+NAWAT_SERVE_HOST=127.0.0.1
+NAWAT_API_HOST=0.0.0.0
+NAWAT_API_TOKEN=a-long-random-string
+```
+
+```bash
+nawat api
+```
+
+### 3. Start the matching base
 
 Do not serve while a training job is using the GPU.
 
@@ -457,7 +495,7 @@ If startup fails:
 nawat session --log --tail 200
 ```
 
-### 3. Hot-load the adapter
+### 4. Hot-load the adapter
 
 ```bash
 nawat adapter runs/<2b-run-id>/adapter --name latex-ocr-2b
@@ -467,7 +505,7 @@ nawat session
 The adapter must have been trained from the running base. The name passed to
 `--name` becomes the OpenAI-compatible API `model` value.
 
-### 4. Send an image
+### 5. Send an image
 
 ```bash
 IMAGE_PATH=/absolute/path/to/equation.png
@@ -492,7 +530,7 @@ curl http://127.0.0.1:8001/v1/chat/completions \
 
 The generated LaTeX is in `choices[0].message.content`.
 
-### 5. Swap or stop
+### 6. Swap or stop
 
 ```bash
 nawat adapter --unload latex-ocr-2b

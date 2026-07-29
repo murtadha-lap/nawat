@@ -70,20 +70,6 @@ class AdapterBody(BaseModel):
     name: str | None = None
 
 
-class ProposeBody(BaseModel):
-    instruction: str
-    script: str | None = None
-    run_id: str | None = None
-
-
-class ApplyBody(BaseModel):
-    path: str
-    content: str
-    summary: str | None = None
-    instruction: str | None = None
-    backend: str | None = None
-
-
 class EvaluateBody(BaseModel):
     data: str = Field(description="A dataset key or local path holding the eval JSONL")
     file: str | None = None
@@ -379,51 +365,6 @@ def create_app(
     @app.post("/runs/{run_id}/cancel", dependencies=guard)
     def cancel(run_id: str) -> dict[str, Any]:
         return platform.executor.cancel(run_id).to_json()
-
-    # -- agent -------------------------------------------------------------
-
-    @app.get("/agent", dependencies=guard)
-    def agent_status() -> dict[str, Any]:
-        from .agent import build_backend
-
-        try:
-            backend = build_backend(workspace=platform.config.workspace_root)
-            return {"configured": True, "backend": backend.name}
-        except NawatError as exc:
-            return {"configured": False, "backend": None, "remedy": exc.remedy}
-
-    @app.post("/agent/propose", dependencies=guard)
-    def agent_propose(body: ProposeBody) -> dict[str, Any]:
-        from .agent import Agent
-
-        agent = Agent(platform.cache, platform.runs)
-        proposal = agent.propose(body.instruction, script=body.script, run_id=body.run_id)
-        return proposal.to_json()
-
-    @app.post("/agent/apply", dependencies=guard)
-    def agent_apply(body: ApplyBody) -> dict[str, Any]:
-        """The approval step: the reviewed content, applied and committed."""
-        from .agent import Agent, Proposal
-
-        agent = Agent(platform.cache, platform.runs)
-        path = platform.config.workspace_root / body.path
-        proposal = Proposal(
-            path=body.path,
-            old=path.read_text() if path.is_file() else "",
-            new=body.content,
-            summary=body.summary or "agent edit",
-            backend=body.backend or "reviewed",
-            instruction=body.instruction or "",
-        )
-        commit = agent.apply(proposal)
-        return {"path": body.path, "commit": commit}
-
-    @app.post("/runs/{run_id}/describe", dependencies=guard)
-    def describe_run(run_id: str) -> dict[str, Any]:
-        from .agent import Agent
-
-        agent = Agent(platform.cache, platform.runs)
-        return {"run_id": run_id, "description": agent.describe_run(run_id)}
 
     # -- evaluation --------------------------------------------------------
 
