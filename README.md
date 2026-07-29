@@ -48,6 +48,24 @@ vLLM inference.
 > The Python package and CLI command are `nawat`. **Nawāt** (نواة) means
 > “nucleus”—the small core coordinating the research workflow.
 
+## Clone the repository
+
+```bash
+git clone https://github.com/murtadha-lap/nawat.git
+cd nawat
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U uv
+uv pip install -e ".[notebook]"
+```
+
+Confirm that the CLI is installed:
+
+```bash
+nawat --help
+```
+
 ## The research problem
 
 AI research on a local GPU is often limited by storage and workflow friction,
