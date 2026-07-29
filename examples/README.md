@@ -9,8 +9,8 @@ the experiment is worth six hours.
 | [train_latex_ocr.py](train_latex_ocr.py) | The same body as a script, for `nawat submit` |
 
 Neither has an install cell. Set the environment up once —
-[Installation](../README.md#installation) covers Nawāt, Unsloth and the training
-stack — then configure the store:
+[Installation](../README.md#installation) covers Nawāt, Unsloth (to train) and
+vLLM (to serve) — then configure the store:
 
 ```bash
 cp .env.example .env && $EDITOR .env      # endpoint, bucket, credentials, ceiling

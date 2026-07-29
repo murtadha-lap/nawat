@@ -51,26 +51,51 @@ training runs with hub access disabled, so a run can never silently download.
 
 ---
 
+## System requirements
+
+Nawāt itself asks for very little. What it orchestrates does.
+
+| | Requirement | Why |
+| --- | --- | --- |
+| **OS** | Linux | Leases are keyed to `/proc` boot id and process start time |
+| **Python** | 3.11+ | |
+| **GPU** | NVIDIA, compute capability 7.0+ | Training and serving both; a T4 (7.5) is enough for the example |
+| **Driver** | CUDA 12.x capable | Matches the `torch==2.8.0` cu12 build below |
+| **Disk** | Enough for one working set, not your corpus | The point of the project. 200 GB is comfortable |
+| **Object store** | Any S3-compatible endpoint | The source of truth: RustFS, MinIO, SeaweedFS, Ceph, AWS S3 |
+
+Three separate pieces of software, installed once each. Nawāt depends on none of
+them at import time — it runs both as subprocesses — so a missing one costs you
+that capability and nothing else:
+
+| Component | Needed for | Without it |
+| --- | --- | --- |
+| **Nawāt** | Everything | — |
+| **Unsloth** | Training | `nawat submit` and the notebook fail; storage and serving still work |
+| **vLLM** | Serving, and hot-loading adapters | `nawat serve` / `nawat adapter` fail; training still works |
+
 ## Installation
 
 Do this once. The notebook has no install cell — it assumes the environment
 below already exists, so every session after this one starts at the first real
 cell instead of spending minutes re-resolving packages that never changed.
 
-Python 3.11 or newer, and [uv](https://docs.astral.sh/uv/) throughout: it keeps a
-single wheel cache for the whole machine (`~/.cache/uv`), so the *next*
-environment you build hardlinks Torch from local disk instead of downloading it
-again.
+Use [uv](https://docs.astral.sh/uv/) throughout: it keeps a single wheel cache
+for the whole machine (`~/.cache/uv`), so the *next* environment you build
+hardlinks Torch from local disk instead of downloading it again — which matters
+here, because you are about to build two of them.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh     # if you do not have it
-python3 -m venv .venv && source .venv/bin/activate
 ```
 
-**1. Nawāt.** Small — `boto3` and nothing else — because the heavy machinery
-stays in your environment, where you control the versions.
+### 1. Nawāt
+
+Small — `boto3` and nothing else — because the heavy machinery stays in your
+environment, where you control the versions.
 
 ```bash
+python3 -m venv ~/nawat/.venv && source ~/nawat/.venv/bin/activate
 uv pip install "nawat[notebook] @ git+https://github.com/murtadha-lap/nawat.git"
 ```
 
@@ -82,9 +107,10 @@ uv pip install "nawat[notebook] @ git+https://github.com/murtadha-lap/nawat.git"
 | `api` | `fastapi`, `uvicorn`, `httpx` | `nawat api` — control plane, queue, OpenAI-compatible `/v1` |
 | `agent` | `claude-agent-sdk` | `nawat agent` — proposed script changes, diff and approval |
 
-**2. Unsloth and the training stack.** Nawāt does not depend on these — install
-them only if you are going to train. The pinned set below is the one Unsloth's
-own notebook uses:
+### 2. Unsloth — to train
+
+Into the same environment as Nawāt, since the notebook imports both. The pinned
+set is the one Unsloth's own notebook uses:
 
 ```bash
 uv pip install "torch==2.8.0" "triton>=3.3.0" numpy pillow torchvision \
@@ -101,16 +127,52 @@ uv pip install --no-deps --upgrade "torchao>=0.16.0"
 `causal_conv1d` builds against `torch==2.8.0`; on a newer Torch it compiles from
 source and takes several minutes.
 
-**3. Only on Ampere or newer** (compute capability 8.0+ — A100, RTX 30xx/40xx,
-L4). Check with `nvidia-smi --query-gpu=compute_cap --format=csv`:
+**Ampere or newer only** (compute capability 8.0+ — A100, RTX 30xx/40xx, L4).
+Check with `nvidia-smi --query-gpu=compute_cap --format=csv`:
 
 ```bash
 uv pip install --no-deps "apache-tvm-ffi==0.1.9" "tilelang==0.1.8"
 ```
 
-On anything older — a T4 at 7.5, for instance — skip it and set `FLA_TILELANG=0`
-before Unsloth is imported, or the import fails. The notebook's preflight cell
-detects this and sets it for you.
+On anything older — a T4 at 7.5 — skip it and set `FLA_TILELANG=0` before Unsloth
+is imported, or the import fails. The notebook's preflight cell detects this and
+sets it for you.
+
+### 3. vLLM — to serve
+
+**In its own virtualenv.** vLLM and Unsloth both pin Torch, and not to the same
+version; putting them together is how you end up with an environment that
+resolves but crashes at load. You do not have to choose, because Nawāt never
+imports vLLM — it launches the `vllm` binary it finds on `PATH` as a subprocess:
+
+```bash
+python3 -m venv ~/nawat/.venv-vllm
+~/nawat/.venv-vllm/bin/pip install -U uv
+~/nawat/.venv-vllm/bin/uv pip install vllm
+
+# Put just that binary on PATH, without activating the environment:
+mkdir -p ~/.local/bin && ln -sf ~/nawat/.venv-vllm/bin/vllm ~/.local/bin/vllm
+vllm --version                     # must answer from any shell Nawāt runs in
+```
+
+If you would rather install vLLM into the same environment, nothing stops you —
+`uv pip install vllm` — but expect to pin Torch by hand afterwards.
+
+What Nawāt runs, so you can reproduce it by hand when debugging:
+
+```bash
+vllm serve <staged path> --served-model-name <key> --port 8001 \
+     --host 127.0.0.1 --enable-lora
+```
+
+with `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` in the environment — that is the
+switch that makes `nawat adapter` able to load a LoRA into a running server
+instead of restarting it. Tune the rest through `NAWAT_SERVE_EXTRA_ARGS`
+(`--gpu-memory-utilization`, `--max-model-len`, quantization, parallelism); see
+the serving block in `.env.example`.
+
+vLLM must support the architecture you are serving. When it does not, `nawat
+serve` fails with vLLM's own message in `nawat session --log`.
 
 That is the whole setup. From here the notebook opens and runs.
 
@@ -192,12 +254,14 @@ nawat metrics <id> -f      # the loss trace as a terminal chart, live
 ```
 
 **7. Use the result.** Serve the base once and hot-load the adapter onto it —
-seconds, no merge:
+seconds, no merge, and no second copy of the weights (needs vLLM from step 3):
 
 ```bash
-nawat serve models/unsloth/Qwen3.5-0.8B
+nawat serve models/unsloth/Qwen3.5-0.8B     # stages the weights, starts vLLM
 nawat adapter runs/<id>/adapter --name latex-ocr
-nawat session --stop
+nawat session                               # what is up, on which port
+nawat session --log --tail 50               # vLLM's own output, if it did not start
+nawat session --stop                        # or walk away: idle teardown does it
 ```
 
 ## Keys
