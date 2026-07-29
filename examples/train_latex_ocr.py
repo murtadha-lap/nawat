@@ -10,10 +10,9 @@ this repository. See examples/LICENSE.
       --param   max_steps=500 --param learning_rate=2e-4 \
       --notes   "LaTeX OCR, long run"
 
-Add `--param export=gguf --param quantization=q4_k_m` to also produce a
-llama.cpp/Ollama build; `--param export=merged` for FP16 weights alone. Both are
-off by default because each is roughly the size of the base model, and vLLM
-serves the adapter without either.
+GGUF and merged exports are optional because each is roughly the size of the base
+model. Pass `--param export=gguf` or `--param export=merged` only when needed;
+vLLM serves the adapter without either.
 
 The same cells as latex_ocr_qwen3_5_vision.ipynb, minus the two the executor
 does for you: it opens the run before this process starts and closes it when
@@ -132,8 +131,7 @@ adapter = nawat.artifact_dir("adapter")         # ← was "qwen_lora"
 model.save_pretrained(adapter)
 tokenizer.save_pretrained(adapter)
 
-# --export merged / --export gguf, off by default: both are the size of the base
-# model, and vLLM can serve the adapter without either (see the README).
+# Large deployment exports are opt-in; vLLM serves the adapter directly.
 EXPORTS = {value.strip() for value in nawat.param("export", "").split(",") if value.strip()}
 
 if EXPORTS & {"merged", "gguf"}:
@@ -141,7 +139,7 @@ if EXPORTS & {"merged", "gguf"}:
     model.save_pretrained_merged(str(nawat.artifact_dir("merged")), tokenizer)
 
 if "gguf" in EXPORTS:
-    # Builds llama.cpp on first use. The likely failure is llama.cpp not
+    # Invokes the conversion backend on first use. The likely failure is it not
     # supporting the architecture — vision encoders especially. Let the run
     # succeed with what it has rather than throwing away a finished training.
     try:

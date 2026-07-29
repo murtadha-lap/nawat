@@ -227,6 +227,16 @@ directory — so there is nothing to source, and it works the same from a notebo
 kernel started anywhere in the tree. Exported variables still win, for one-off
 overrides.
 
+If `NAWAT_WORKSPACE` is outside the cloned repository, `.env` beside the clone is not above the training process and cannot be discovered. Link the same configuration above the workspace, or set it explicitly:
+
+```bash
+ln -s "$PWD/.env" ~/nawat/.env
+# Alternative: export NAWAT_ENV_FILE="$PWD/.env"
+```
+
+Run `nawat config` from inside `NAWAT_WORKSPACE` before training. Its `env_file`, endpoint, and bucket must be correct there—not only inside the repository.
+
+
 **3. Prove the pairing works.** Not a ping: this writes, lists, verifies and
 deletes a probe object, because those are the four things everything else
 depends on.
@@ -261,18 +271,22 @@ workspace — `~/nawat/workspace` by default, `NAWAT_WORKSPACE` to move it — a
 anything outside it is refused, so copy it in first:
 
 ```bash
+mkdir -p ~/nawat/workspace
 cp examples/train_latex_ocr.py ~/nawat/workspace/
+cd ~/nawat/workspace
+nawat config
+nawat check
 nawat submit train_latex_ocr.py \
   --model   models/unsloth/Qwen3.5-0.8B \
   --dataset datasets/unsloth/LaTeX_OCR \
-  --param   max_steps=60
+  --param   max_steps=3
 ```
 
 **6. Watch it.** From any other shell, at any time:
 
 ```bash
 nawat runs                 # history, newest first
-nawat logs    <id> -f      # the trainer's output, live
+nawat logs    <id> -f      # the trainer output, live
 nawat metrics <id> -f      # the loss trace as a terminal chart, live
 ```
 
@@ -350,6 +364,27 @@ tokenizer.save_pretrained(run.artifact_dir("adapter"))
 
 run.finish()    # upload, verify file by file, reclaim the disk, close the record
 ```
+
+### Why Nawāt stores training parameters
+
+The `params` dictionary makes each experiment configurable and reproducible. Nawāt stores these values in the run record alongside the model, dataset, script, logs, and metrics, so you can see exactly which settings produced an adapter. `run.param(name, default)` reads the recorded value while preserving a normal Python default:
+
+```python
+max_steps = run.param("max_steps", 30)
+learning_rate = run.param("learning_rate", 2e-4)
+```
+
+The same training script can then run a new experiment without being edited:
+
+```bash
+nawat submit train_latex_ocr.py \
+  --model models/unsloth/Qwen3.5-0.8B \
+  --dataset datasets/unsloth/LaTeX_OCR \
+  --param max_steps=100 \
+  --param learning_rate=1e-4
+```
+
+Parameters are optional: ordinary hard-coded Unsloth settings still work. Use Nawāt parameters for values you expect to compare or override between runs.
 
 `begin_run` stages both inputs — cache, then object storage, then Hugging Face —
 and leases them to the kernel's own pid. The lease dies with the kernel, crash
@@ -561,98 +596,119 @@ with nbconvert and the executed copy is archived as the run record. Drop the
 `begin_run`/`finish` cells first — under the executor the run already exists —
 and the pip-install cell is unnecessary on a host with Unsloth already installed.
 
-**Test the adapter — no merge, under two minutes:**
+## Inference with Nawāt and vLLM
+
+vLLM is the inference engine; Nawāt supplies storage, lifecycle, and adapter management around it. The base model and LoRA remain separate:
+
+| Part | Example | Role |
+| --- | --- | --- |
+| Base model | `models/unsloth/Qwen3.5-0.8B` | Full pretrained weights, loaded into GPU memory once |
+| Adapter | `runs/<id>/adapter` | Small trained LoRA, staged and hot-loaded at runtime |
+| API model name | `latex-ocr` | Name clients send in the OpenAI-compatible request |
+
+This avoids a merged copy for every experiment. One running base can test different compatible adapters without restarting vLLM. GGUF exports are separate deployment artifacts and are not used in this vLLM path.
+
+### 1. Confirm the run produced an adapter
+
+Wait for training to finish, then inspect its record:
 
 ```bash
-nawat serve models/unsloth/Qwen3.5-0.8B          # stages weights, starts vLLM
-nawat adapter runs/<id>/adapter --name latex-ocr # hot-loads onto the running base
-
-curl http://127.0.0.1:8001/v1/chat/completions -d '{
-  "model": "latex-ocr",
-  "messages": [{"role": "user", "content": [
-    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
-    {"type": "text", "text": "Write the LaTeX representation for this image."}]}]
-}'
-
-nawat session --stop    # or just walk away: idle teardown releases GPU + disk
+nawat runs
+nawat run <id>
 ```
 
-A ~200 MB LoRA against a multi-GB base: merging to test would multiply the
-storage cost per experiment by two orders of magnitude. Serving the base once and
-swapping adapters at runtime makes testing effectively free.
+The state must be `succeeded` and the record must include `runs/<id>/adapter`. Do not start inference while another GPU training run is active.
 
----
+### 2. Start the base model
 
-## Exports: merged FP16 and GGUF
+Install vLLM using the separate environment in [vLLM — to serve](#3-vllm--to-serve), ensure `vllm --version` works on `PATH`, then configure conservative defaults for a 16 GB GPU:
 
-Not everything can load an adapter. `llama.cpp`, Ollama and most edge runtimes
-want one self-contained file, which means merging the LoRA back into the base and
-converting the result. Both outputs are roughly the size of the base model, and
-on an ordinary setup both accumulate forever, because nothing ever decides they
-can go.
-
-Here they are artifact classes like any other: written into the run's output
-directory, published and verified on success, then reclaimed from local disk.
-
-```python
-# GGUF conversion consumes merged weights, so it implies this step:
-model.save_pretrained_merged(str(run.artifact_dir("merged")), tokenizer)
-
-model.save_pretrained_gguf(
-    str(run.artifact_dir("gguf")), tokenizer,
-    quantization_method = "q4_k_m",        # or "q8_0", "q5_k_m", "f16"
-)
-run.finish()                               # → runs/<id>/merged, runs/<id>/gguf
+```dotenv
+NAWAT_SERVE_PORT=8001
+NAWAT_SERVE_STARTUP_TIMEOUT=600
+NAWAT_SERVE_IDLE_TIMEOUT=900
+NAWAT_SERVE_EXTRA_ARGS=--gpu-memory-utilization 0.85 --max-model-len 4096
 ```
 
-Several quantizations at once is far cheaper than one at a time — llama.cpp is
-built and the FP16 intermediate produced once, not once per format:
-
-```python
-model.save_pretrained_gguf(str(run.artifact_dir("gguf")), tokenizer,
-                           quantization_method = ["q4_k_m", "q5_k_m", "q8_0"])
-```
-
-Pass `str(...)`: Unsloth's `save_pretrained_*` join paths as text, and a `Path`
-trips them up.
-
-**When it refuses.** GGUF conversion asks llama.cpp to recognise the
-architecture, and support for vision encoders lags well behind support for text
-models. If it fails, that is llama.cpp's answer, not something Nawāt can work
-around — so guard it and let the run keep what it already earned:
-
-```python
-try:
-    model.save_pretrained_gguf(str(run.artifact_dir("gguf")), tokenizer,
-                               quantization_method = "q4_k_m")
-except Exception as exc:
-    run.log(f"gguf conversion failed: {exc}")   # adapter and merged still publish
-```
-
-An artifact directory left empty is skipped rather than published, so a failed
-conversion leaves no trace but the log line.
-
-**Using one later.** It is in object storage, not on your disk. `nawat resolve`
-brings it back, making room first if the ceiling requires it:
+From the configured workspace:
 
 ```bash
-llama-cli -m "$(nawat resolve runs/<id>/gguf)"/*.gguf -p "..."
-
-# Promote it to a named deployment artifact, separate from the run that made it:
-nawat publish "$(nawat resolve runs/<id>/gguf)" exports/latex-ocr-q4
-nawat keep exports/latex-ocr-q4        # exempt it from reclamation
-
-# Ollama:
-printf 'FROM %s\n' "$(nawat resolve exports/latex-ocr-q4)"/*.gguf > Modelfile
-ollama create latex-ocr -f Modelfile
+nawat serve models/unsloth/Qwen3.5-0.8B
+nawat session
 ```
 
-In the submitted script the exports are behind a parameter, off by default:
+`nawat serve` resolves the base through cache → object storage → Hugging Face, leases its local files, launches vLLM with runtime LoRA updates enabled, and waits for `/health`. It does not load the trained adapter yet.
+
+If startup fails:
 
 ```bash
-nawat submit train_latex_ocr.py --model ... --dataset ... \
-  --param export=gguf --param quantization=q4_k_m
+nawat session --log --tail 200
 ```
+
+### 3. Hot-load the trained adapter
+
+```bash
+nawat adapter runs/<id>/adapter --name latex-ocr
+nawat session
+```
+
+Nawāt restores the adapter if necessary and calls vLLM runtime LoRA loading. `--name latex-ocr` becomes the API `model` value; it is not an object-storage key. The adapter must have been trained from the running base model.
+
+### 4. Send a vision request
+
+Encode a local image without writing another copy:
+
+```bash
+IMAGE_PATH=/absolute/path/to/equation.png
+IMAGE_B64=$(base64 -w0 "$IMAGE_PATH")
+```
+
+Call vLLM’s OpenAI-compatible endpoint:
+
+```bash
+curl http://127.0.0.1:8001/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"model\": \"latex-ocr\",
+    \"messages\": [{
+      \"role\": \"user\",
+      \"content\": [
+        {
+          \"type\": \"image_url\",
+          \"image_url\": {
+            \"url\": \"data:image/png;base64,$IMAGE_B64\"
+          }
+        },
+        {
+          \"type\": \"text\",
+          \"text\": \"Write the LaTeX representation for this image.\"
+        }
+      ]
+    }],
+    \"temperature\": 0,
+    \"max_tokens\": 512
+  }"
+```
+
+The generated LaTeX is returned in `choices[0].message.content`. The exact multimodal request schema depends on the architecture and installed vLLM version.
+
+### 5. Swap adapters or stop
+
+Replace an experiment without reloading the base:
+
+```bash
+nawat adapter --unload latex-ocr
+nawat adapter runs/<new-id>/adapter --name latex-ocr
+```
+
+Release the adapter, GPU, and model lease when finished:
+
+```bash
+nawat adapter --unload latex-ocr
+nawat session --stop
+```
+
+The configured idle timeout also tears the server down automatically.
 
 ---
 
@@ -794,6 +850,101 @@ response; `nawat config` prints `"set"` in their place. Training scripts run wit
 your privileges and are not sandboxed, so do not point it at code you would not
 run yourself.
 
+## Troubleshooting the training host
+
+### `nvidia-smi` cannot communicate with the driver
+
+This is a host-driver problem, not a Python problem. Check the running kernel and installed NVIDIA modules:
+
+```bash
+uname -r
+nvidia-smi
+lsmod | grep nvidia
+dpkg -l | grep linux-modules-nvidia
+```
+
+On Ubuntu, a common cause after a kernel update is that the machine booted a newer kernel than the installed NVIDIA module. Install the matching signed module through the driver metapackage, then reboot. For example, if the selected driver is the open 595 series:
+
+```bash
+sudo apt update
+sudo apt install --upgrade linux-modules-nvidia-595-open-generic nvidia-driver-595-open
+sudo reboot
+```
+
+Use the driver series selected for your machine; do not copy `595` blindly. Secure Boot works with Ubuntu signed module packages. Continue only after both `nvidia-smi` and `torch.cuda.is_available()` succeed.
+
+### PyTorch has CUDA, but `causal-conv1d` cannot find `nvcc`
+
+The CUDA runtime bundled with PyTorch is not the CUDA compiler. Compare all three layers:
+
+```bash
+nvidia-smi                         # driver maximum CUDA compatibility
+nvcc --version                     # installed compiler toolkit
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
+```
+
+For the RTX 50 series (`sm_120`) with the documented `torch==2.8.0+cu128`, install the actual CUDA 12.8 toolkit from NVIDIA’s Ubuntu repository (the distro `nvidia-cuda-toolkit` may be older):
+
+```bash
+cd /tmp
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+sudo apt install cuda-toolkit-12-8
+```
+
+Then select it before building extensions:
+
+```bash
+export CUDA_HOME=/usr/local/cuda-12.8
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+hash -r
+nvcc --version                     # must report release 12.8
+uv pip install --no-build-isolation "causal_conv1d==1.6.0" flash-linear-attention
+```
+
+The CUDA version printed by `nvidia-smi` is not proof that the matching toolkit or `nvcc` is installed.
+
+### `workspace` exists but is not a directory
+
+Inspect it before changing anything:
+
+```bash
+ls -ld ~/nawat/workspace
+readlink -f ~/nawat/workspace
+```
+
+If it is a broken symbolic link, remove only the link and create the configured directory:
+
+```bash
+rm ~/nawat/workspace
+mkdir -p ~/nawat/workspace
+```
+
+Do not recursively delete a real workspace containing research files.
+
+### Training exits 0, but the run says no `.env` was found
+
+Training succeeded; final publication failed because the training process started outside the `.env` search tree. First make the configuration discoverable and test it from the workspace:
+
+```bash
+ln -s /absolute/path/to/the/repository/.env ~/nawat/.env
+cd ~/nawat/workspace
+nawat config
+nawat check
+```
+
+The completed adapter normally remains under the configured cache root shown by `nawat config`. Confirm it is intact, then publish it without retraining (replace `<cache-root>` with that path):
+
+```bash
+ls -lah "<cache-root>/runs/<id>/adapter"
+nawat publish "<cache-root>/runs/<id>/adapter" runs/<id>/adapter
+nawat registry | grep "<id>"
+```
+
+`nawat publish` uploads, verifies, and then reclaims that local directory. Add `--keep` if the local copy must remain. The historical run record stays failed because publication failed at that time, but the recovered adapter key is valid. Run another three-step smoke test if you want a clean end-to-end `succeeded` record.
+
 ## Working on it
 
 ```bash
@@ -833,5 +984,5 @@ Two things to be clear about:
   downstream. They therefore stay under LGPL-3.0 and may be used commercially on
   its terms — see [examples/LICENSE](examples/LICENSE).
 
-Nawāt does not bundle Unsloth, vLLM or llama.cpp; each is installed separately
+Nawāt does not bundle Unsloth or vLLM; each is installed separately
 under its own licence.
