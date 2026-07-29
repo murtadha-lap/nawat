@@ -27,13 +27,6 @@ hub = ["huggingface_hub>=0.23"]
 agent = ["claude-agent-sdk>=0.2"]
 api = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "httpx>=0.27"]
 notebook = ["huggingface_hub>=0.23", "matplotlib>=3.8"]
-dev = [
-    "pytest>=8",
-    "moto[s3,server]>=5",
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-    "httpx>=0.27",
-]
 
 [project.scripts]
 nawat = "nawat.cli:main"
@@ -44,7 +37,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["nawat"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"

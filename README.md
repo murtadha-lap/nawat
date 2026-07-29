@@ -53,45 +53,66 @@ training runs with hub access disabled, so a run can never silently download.
 
 ## Installation
 
-Python 3.11 or newer. The package itself is small — `boto3` and nothing else —
-because the heavy machinery (Unsloth, vLLM, llama.cpp) stays in your own
-environment where you already control the versions.
+Do this once. The notebook has no install cell — it assumes the environment
+below already exists, so every session after this one starts at the first real
+cell instead of spending minutes re-resolving packages that never changed.
+
+Python 3.11 or newer, and [uv](https://docs.astral.sh/uv/) throughout: it keeps a
+single wheel cache for the whole machine (`~/.cache/uv`), so the *next*
+environment you build hardlinks Torch from local disk instead of downloading it
+again.
 
 ```bash
-pip install git+https://github.com/murtadha-lap/nawat.git
+curl -LsSf https://astral.sh/uv/install.sh | sh     # if you do not have it
+python3 -m venv .venv && source .venv/bin/activate
 ```
 
-Or with [uv](https://docs.astral.sh/uv/), which is worth it here: it keeps one
-wheel cache for the whole machine, so the next environment you build links from
-local disk instead of downloading Torch and friends again.
+**1. Nawāt.** Small — `boto3` and nothing else — because the heavy machinery
+stays in your environment, where you control the versions.
 
 ```bash
-uv pip install git+https://github.com/murtadha-lap/nawat.git
-```
-
-Extras, added as you need them:
-
-```bash
-uv pip install "nawat[notebook] @ git+https://github.com/murtadha-lap/nawat.git"   # + huggingface_hub, matplotlib
-uv pip install "nawat[api]      @ git+https://github.com/murtadha-lap/nawat.git"   # + the HTTP control plane
-uv pip install "nawat[agent]    @ git+https://github.com/murtadha-lap/nawat.git"   # + agent-assisted authoring
+uv pip install "nawat[notebook] @ git+https://github.com/murtadha-lap/nawat.git"
 ```
 
 | Extra | Pulls in | For |
 | --- | --- | --- |
-| `hub` | `huggingface_hub` | Fetching models and datasets that are not yet in your store |
-| `notebook` | `huggingface_hub`, `matplotlib` | Notebook use, with the loss trace plotted inline |
-| `api` | `fastapi`, `uvicorn`, `httpx` | `nawat api` — HTTP control plane, queue, OpenAI-compatible `/v1` |
+| *(none)* | `boto3` | The cache, the CLI, everything storage |
+| `hub` | `huggingface_hub` | Fetching models and datasets not yet in your store |
+| `notebook` | `hub` + `matplotlib` | Notebook use, with the loss trace plotted inline |
+| `api` | `fastapi`, `uvicorn`, `httpx` | `nawat api` — control plane, queue, OpenAI-compatible `/v1` |
 | `agent` | `claude-agent-sdk` | `nawat agent` — proposed script changes, diff and approval |
-| `dev` | `pytest`, `moto` | Running the test suite |
 
-To hack on it:
+**2. Unsloth and the training stack.** Nawāt does not depend on these — install
+them only if you are going to train. The pinned set below is the one Unsloth's
+own notebook uses:
 
 ```bash
-git clone https://github.com/murtadha-lap/nawat.git && cd nawat
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,hub]"
-.venv/bin/python -m pytest        # the full suite, no GPU required
+uv pip install "torch==2.8.0" "triton>=3.3.0" numpy pillow torchvision \
+    bitsandbytes xformers==0.0.32.post2 \
+    "unsloth_zoo[base] @ git+https://github.com/unslothai/unsloth-zoo" \
+    "unsloth[base] @ git+https://github.com/unslothai/unsloth"
+uv pip install --no-deps "torchcodec==0.7.0"
+uv pip install --upgrade --no-deps "tokenizers>=0.22.0,<=0.23.0" trl==0.22.2 unsloth unsloth_zoo
+uv pip install transformers==5.2.0
+uv pip install --no-build-isolation flash-linear-attention "causal_conv1d==1.6.0"
+uv pip install --no-deps --upgrade "torchao>=0.16.0"
 ```
+
+`causal_conv1d` builds against `torch==2.8.0`; on a newer Torch it compiles from
+source and takes several minutes.
+
+**3. Only on Ampere or newer** (compute capability 8.0+ — A100, RTX 30xx/40xx,
+L4). Check with `nvidia-smi --query-gpu=compute_cap --format=csv`:
+
+```bash
+uv pip install --no-deps "apache-tvm-ffi==0.1.9" "tilelang==0.1.8"
+```
+
+On anything older — a T4 at 7.5, for instance — skip it and set `FLA_TILELANG=0`
+before Unsloth is imported, or the import fails. The notebook's preflight cell
+detects this and sets it for you.
+
+That is the whole setup. From here the notebook opens and runs.
 
 ## Getting started, step by step
 
@@ -686,19 +707,15 @@ response; `nawat config` prints `"set"` in their place. Training scripts run wit
 your privileges and are not sandboxed, so do not point it at code you would not
 run yourself.
 
-## Tests
+## Working on it
 
 ```bash
 git clone https://github.com/murtadha-lap/nawat.git && cd nawat
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,hub]"
-.venv/bin/python -m pytest
+python3 -m venv .venv && .venv/bin/pip install -e ".[notebook,api]"
 ```
 
-The eviction tests are a release gate: unreplicated, kept, in-use and
-unverifiable artifacts are never removed, and a refusal deletes nothing.
-The S3 backend is driven over real HTTP (pagination past 1000 keys, multipart,
-prefix isolation), and sessions are tested against a real subprocess server —
-no GPU needed to run the suite.
+An editable install, so edits to `nawat/` take effect in the next kernel without
+reinstalling.
 
 ## Known limits
 

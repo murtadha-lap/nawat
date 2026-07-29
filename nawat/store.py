@@ -2,9 +2,9 @@
 
 Two backends behind one interface: RustFS (or any S3-compatible endpoint) for
 real deployments, and a plain directory tree for development on a host without
-a store running. Both are exercised by the same tests, so the safety properties
-that matter — atomic writes, name-and-size verification — are properties of the
-base class rather than of either backend.
+a store running. The safety properties that matter — atomic writes,
+name-and-size verification — live in the base class rather than in either
+backend, so neither can drift into being the unsafe one.
 """
 
 from __future__ import annotations
@@ -210,8 +210,8 @@ class ObjectStore(ABC):
 class LocalObjectStore(ObjectStore):
     """A directory tree standing in for the object store.
 
-    Real for development and for the test suite — not a mock. It exercises the
-    same download/upload/verify paths the S3 backend uses.
+    Real, not a mock: it runs the same download/upload/verify paths the S3
+    backend does, so a host with no object store can still exercise them.
     """
 
     name = "local object store"
