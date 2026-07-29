@@ -1,5 +1,9 @@
 # Nawāt (نواة)
 
+<p align="center">
+  <img src="docs/image.png" alt="Nawāt research flow from local models and datasets through managed training to verified adapters and vLLM inference" width="100%">
+</p>
+
 **Local-first training and inference for AI researchers.**
 
 Nawāt lets one GPU workstation work with more models and data than fit on its
@@ -612,6 +616,36 @@ export PATH="$CUDA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 hash -r
 nvcc --version
+```
+
+### The inference server exits with `FlashInfer requires GPUs with sm75 or higher`
+
+The message is misleading: it also appears when the GPU is far newer than sm75.
+FlashInfer compiles its sampler on demand against the CUDA toolkit on `PATH`, and
+a recent card needs a recent toolkit (sm120, the RTX 50 series, needs CUDA 12.9
+or later). When the toolkit is older, FlashInfer finds no architecture it can
+target and reports that empty list as the sm75 error. The line above it in the
+session log names the real cause:
+
+```text
+Failed to get device capability: SM 12.x requires CUDA >= 12.9.
+```
+
+Nawāt therefore starts vLLM with `VLLM_USE_FLASHINFER_SAMPLER=0`, which selects
+vLLM's built-in sampler and needs no compiler. Sampled output is unchanged. If
+your toolkit does match your GPU, opt back in from the real environment:
+
+```bash
+export VLLM_USE_FLASHINFER_SAMPLER=1
+nawat serve models/unsloth/Qwen3.5-2B
+```
+
+This one is not a `NAWAT_` setting, so `.env` alone will not carry it: Nawāt
+reads that file for its own configuration and does not export it. Putting it in
+`.env` works only if you also source the file, as its header describes:
+
+```bash
+set -a && . ./.env && set +a
 ```
 
 ### `workspace` exists but is not a directory

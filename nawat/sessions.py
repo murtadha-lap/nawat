@@ -137,6 +137,11 @@ class ServingBackend:
         raise NotImplementedError
 
     def environment(self) -> dict[str, str]:
+        """Variables the backend needs; these override the caller's environment."""
+        return {}
+
+    def environment_defaults(self) -> dict[str, str]:
+        """Variables the backend prefers; anything already set by the caller wins."""
         return {}
 
     def health_path(self) -> str:
@@ -168,6 +173,16 @@ class VLLMBackend(ServingBackend):
         # Without this, vLLM refuses the runtime adapter endpoints and testing an
         # adapter would mean restarting the server.
         return {"VLLM_ALLOW_RUNTIME_LORA_UPDATING": "True"}
+
+    def environment_defaults(self) -> dict[str, str]:
+        # vLLM's FlashInfer sampler is compiled on demand against the system CUDA
+        # toolkit, which on a recent GPU is easily older than that GPU's arch needs
+        # (sm120 wants CUDA >= 12.9). FlashInfer then ends up with no target arch at
+        # all and reports it as "requires GPUs with sm75 or higher", which kills the
+        # engine during startup and reads like the card is too old. vLLM's built-in
+        # sampler produces the same tokens, so prefer it and leave the door open for
+        # anyone whose toolkit does match to set this back to 1 themselves.
+        return {"VLLM_USE_FLASHINFER_SAMPLER": "0"}
 
 
 def build_backend(name: str) -> ServingBackend:
@@ -301,7 +316,11 @@ class SessionManager:
         command = self.backend.command(
             model_path=path, model_name=str(model), port=session.port, extra=extra
         )
-        env = {**os.environ, **self.backend.environment()}
+        env = {
+            **self.backend.environment_defaults(),
+            **os.environ,
+            **self.backend.environment(),
+        }
         log_path = self._log_path(session.id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
