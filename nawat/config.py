@@ -1,10 +1,10 @@
 """Configuration, injected through the environment and never embedded.
 
-Training scripts, the CLI and (later) the API all read the same variables, so a
-script that runs under the platform runs unmodified outside it (PRD principle 4).
-Credentials are held in fields excluded from ``repr`` and stripped by
-:meth:`Config.redacted`, which is the only form allowed near a log or the UI
-(NFR-4.1).
+Training scripts, notebooks, the CLI and the API all read the same variables, so
+a script that runs under the platform runs unmodified outside it (PRD principle
+4). Credentials are held in fields excluded from ``repr`` and stripped by
+:meth:`Config.redacted`, which is the only form allowed near a log, a run record
+or an API response (NFR-4.1).
 """
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ class Config:
             path.mkdir(parents=True, exist_ok=True)
 
     def redacted(self) -> dict[str, object]:
-        """The only representation safe to log, store in a run record, or show in the UI."""
+        """The only representation safe to log, store in a run record, or return over HTTP."""
         out: dict[str, object] = {}
         for f in fields(self):
             value = getattr(self, f.name)

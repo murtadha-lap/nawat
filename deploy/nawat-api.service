@@ -1,4 +1,4 @@
-# Nawāt control plane — API, run queue, web interface, session supervision.
+# Nawāt control plane — HTTP API, run queue, session supervision.
 #
 #   sudo cp deploy/nawat-api.service /etc/systemd/system/
 #   sudo systemctl daemon-reload

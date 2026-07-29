@@ -6,12 +6,16 @@ Nawāt is a self-hosted platform for fine-tuning and serving open-weight models 
 single GPU workstation whose local storage is far smaller than its working corpus.
 Object storage is the source of truth for every model, dataset and run artifact;
 local disk is a disposable cache managed automatically. You write an ordinary
-Unsloth training script, submit it, and never touch a file to make room for it.
+Unsloth notebook or training script, and never touch a file to make room for it.
 
-All seven PRD phases are built: the storage core, the control plane, metrics, the
-web interface, evaluation, agent-assisted authoring, and hardening. Operational
-procedures live in [docs/OPERATIONS.md](docs/OPERATIONS.md); the control plane
-runs as a systemd service via [deploy/nawat-api.service](deploy/nawat-api.service).
+It is a Python library first — `import nawat` in a Colab-style notebook and keep
+working the way you already do — with a CLI and an HTTP control plane over the
+same implementation. Operational procedures live in
+[docs/OPERATIONS.md](docs/OPERATIONS.md); the control plane runs as a systemd
+service via [deploy/nawat-api.service](deploy/nawat-api.service).
+
+Working examples: [examples/](examples/) — the Unsloth Qwen3.5-0.8B vision
+notebook, and the same fine-tune as a submitted script.
 
 ---
 
@@ -92,27 +96,116 @@ returning. No mapping table, no registration step.
 
 ---
 
-## Using it with Unsloth
+## Using it with Unsloth, in a notebook
 
 Take the standard Unsloth vision notebook — Qwen3.5-0.8B fine-tuned on
-`unsloth/LaTeX_OCR`. Three lines change, all of them the lines that name a
-location. Everything Unsloth-specific stays exactly as the notebook has it.
+`unsloth/LaTeX_OCR`. What changes is the lines that name a location, plus two
+that open and close the run. Everything Unsloth-specific — the model setup, the
+collator, the trainer arguments — stays exactly as the notebook has it.
+
+```python
+import nawat
+
+run = nawat.begin_run(
+    model   = "models/unsloth/Qwen3.5-0.8B",
+    dataset = "datasets/unsloth/LaTeX_OCR",
+    params  = {"max_steps": 30, "learning_rate": 2e-4},
+    notes   = "LaTeX OCR baseline",
+)
+
+from unsloth import FastVisionModel
+model, tokenizer = FastVisionModel.from_pretrained(   # ← was "unsloth/Qwen3.5-0.8B"
+    run.model_dir, load_in_4bit = False, use_gradient_checkpointing = "unsloth",
+)
+model = FastVisionModel.get_peft_model(model, r = run.param("rank", 16), ...)
+
+from datasets import load_dataset
+dataset = load_dataset(run.dataset_dir, split = "train")   # ← was "unsloth/LaTeX_OCR"
+
+trainer = SFTTrainer(
+    model = model, tokenizer = tokenizer,
+    data_collator = UnslothVisionDataCollator(model, tokenizer),
+    train_dataset = converted_dataset,
+    callbacks = [run.callback()],                 # live loss trace, one argument
+    args = SFTConfig(
+        max_steps     = run.param("max_steps", 30),
+        learning_rate = run.param("learning_rate", 2e-4),
+        # Checkpoints are scratch, not artifacts — kept out of the published tree:
+        output_dir = str(run.scratch_dir("trainer")),
+        ...
+    ),
+)
+trainer.train()
+
+model.save_pretrained(run.artifact_dir("adapter"))    # ← was "qwen_lora"
+tokenizer.save_pretrained(run.artifact_dir("adapter"))
+
+run.finish()    # upload, verify file by file, reclaim the disk, close the record
+```
+
+`begin_run` stages both inputs — cache, then object storage, then Hugging Face —
+and leases them to the kernel's own pid. The lease dies with the kernel, crash
+included, so a forgotten notebook cannot wedge the cache and a live one cannot
+lose its weights to an eviction between cells. While the run is open the hub is
+switched off, so a typo in a repo id fails loudly instead of quietly pulling
+gigabytes onto a disk with no room for them.
+
+`run.finish()` publishes every directory under `run.out_dir` as its own artifact
+— `runs/<id>/adapter`, and `merged/` or `gguf/` if you saved them — verifies each
+in object storage file by file, reclaims the local copy, and releases the inputs.
+A run that raises instead publishes nothing and keeps its log and record:
+
+```python
+with nawat.begin_run(model=..., dataset=...) as run:
+    ...          # an exception here records the failure and re-raises
+```
+
+The full notebook is [examples/latex_ocr_qwen3_5_vision.ipynb](examples/latex_ocr_qwen3_5_vision.ipynb).
+
+| Notebook API | What it is |
+| --- | --- |
+| `run.model_dir` / `run.dataset_dir` | Staged input paths, ready for `from_pretrained` / `load_dataset` |
+| `run.artifact_dir(name)` | A directory published as `runs/<id>/<name>` on `finish()` |
+| `run.scratch_dir(name)` | Space that is *not* published, deleted at the end — put checkpoints here |
+| `run.param(name, default)` | A hyperparameter, typed from its default, overridable by `--param` |
+| `run.callback()` | A `transformers` callback streaming the metric series |
+| `run.finish()` / `run.fail(e)` / `run.cancel()` | Close the record; `run.close()` just lets go |
+| `nawat.history()` / `nawat.trace(id)` | Run history and metric series, for plotting inline |
+
+Without a run record — just the cache — the two calls that matter are still one
+import each:
+
+```python
+model_dir = nawat.resolve("models/unsloth/Qwen3.5-0.8B")   # staged + held
+nawat.publish(out_dir, "runs/2026-07-28-a91f/adapter")     # upload, verify, reclaim
+```
+
+`resolve` holds the artifact for the lifetime of the kernel; `with
+nawat.holding(...)` scopes it tighter.
+
+## The same run, submitted
+
+A notebook is for deciding what to run; `nawat submit` is for running it for six
+hours without a browser tab open. The body is the same code — `nawat.model_dir()`,
+`nawat.param()` and `nawat.artifact_dir()` read the environment the executor
+injected when there is one, and the open kernel run otherwise, so cells move
+between the two without an edit. Only `begin_run`/`finish` go away, because the
+executor does both around the process.
 
 **`~/nawat/workspace/train_latex_ocr.py`:**
 
 ```python
-# The Unsloth LaTeX-OCR notebook as a Nawāt run. The NAWAT_* variables are just
-# paths and strings, so this script also runs unmodified outside the platform.
-import os, pathlib, tempfile
+# The Unsloth LaTeX-OCR notebook as a Nawāt run. Every accessor has an
+# os.environ equivalent, so this script also runs unmodified outside the
+# platform. Full version: examples/train_latex_ocr.py
+import tempfile
 
-MODEL_DIR = os.environ["NAWAT_MODEL_DIR"]      # staged models/unsloth/Qwen3.5-0.8B
-DATA_DIR  = os.environ["NAWAT_DATASET_DIR"]    # staged datasets/unsloth/LaTeX_OCR
-OUT       = pathlib.Path(os.environ["NAWAT_OUT_DIR"])
+import nawat
 
 from unsloth import FastVisionModel
 
 model, tokenizer = FastVisionModel.from_pretrained(
-    MODEL_DIR,                                 # ← was "unsloth/Qwen3.5-0.8B"
+    nawat.model_dir(),                         # ← was "unsloth/Qwen3.5-0.8B"
     load_in_4bit = False,
     use_gradient_checkpointing = "unsloth",
 )
@@ -127,7 +220,7 @@ model = FastVisionModel.get_peft_model(
 )
 
 from datasets import load_dataset
-dataset = load_dataset(DATA_DIR, split = "train")   # ← was "unsloth/LaTeX_OCR"
+dataset = load_dataset(nawat.dataset_dir(), split = "train")   # ← was "unsloth/LaTeX_OCR"
 
 instruction = "Write the LaTeX representation for this image."
 def convert(sample):
@@ -149,21 +242,22 @@ trainer = SFTTrainer(
     tokenizer = tokenizer,
     data_collator = UnslothVisionDataCollator(model, tokenizer),
     train_dataset = converted_dataset,
+    callbacks = [nawat.metrics.trainer_callback()],   # the live loss trace
     args = SFTConfig(
         per_device_train_batch_size = 2,
         gradient_accumulation_steps = 4,
         warmup_steps = 5,
         # Hyperparameters arrive from `nawat submit --param ...`, with the
         # notebook's values as defaults:
-        max_steps     = int(os.environ.get("NAWAT_PARAM_MAX_STEPS", "30")),
-        learning_rate = float(os.environ.get("NAWAT_PARAM_LEARNING_RATE", "2e-4")),
+        max_steps     = nawat.param("max_steps", 30),
+        learning_rate = nawat.param("learning_rate", 2e-4),
         logging_steps = 1,
         optim = "adamw_8bit",
         weight_decay = 0.001,
         lr_scheduler_type = "linear",
         seed = 3407,
         # Intermediate checkpoints are scratch, not artifacts — keep them out of
-        # NAWAT_OUT_DIR so they are not published:
+        # the output directory so they are not published:
         output_dir = tempfile.mkdtemp(prefix = "trainer-"),
         report_to = "none",
         remove_unused_columns = False,
@@ -172,16 +266,17 @@ trainer = SFTTrainer(
         max_length = 2048,
     ),
 )
-trainer.train()   # add callbacks=[nawat.metrics.trainer_callback()] above for a live loss trace
+trainer.train()
 
-# Everything written under NAWAT_OUT_DIR is published as its own artifact class
-# when the run exits 0 — uploaded, verified file by file, then reclaimed.
-model.save_pretrained(OUT / "adapter")             # ← was "qwen_lora"
-tokenizer.save_pretrained(OUT / "adapter")
+# Everything written under the output directory is published as its own artifact
+# class when the run exits 0 — uploaded, verified file by file, then reclaimed.
+adapter = nawat.artifact_dir("adapter")            # ← was "qwen_lora"
+model.save_pretrained(adapter)
+tokenizer.save_pretrained(adapter)
 
 # Only on request, for deployment — each becomes runs/<id>/<name>:
-# model.save_pretrained_merged(OUT / "merged", tokenizer)
-# model.save_pretrained_gguf(OUT / "gguf", tokenizer, quantization_method = "q4_k_m")
+# model.save_pretrained_merged(nawat.artifact_dir("merged"), tokenizer)
+# model.save_pretrained_gguf(nawat.artifact_dir("gguf"), tokenizer, quantization_method = "q4_k_m")
 ```
 
 **Submit it:**
@@ -208,20 +303,24 @@ What happens, in order:
    run record go to `runs/<id>/record`. A failed run publishes nothing but keeps
    both.
 
-**What changed vs. the notebook** — nothing else did:
+**What changed vs. the stock Unsloth notebook** — nothing else did:
 
-| Notebook | Under Nawāt |
-| --- | --- |
-| `from_pretrained("unsloth/Qwen3.5-0.8B")` | `from_pretrained(os.environ["NAWAT_MODEL_DIR"])` |
-| `load_dataset("unsloth/LaTeX_OCR")` | `load_dataset(os.environ["NAWAT_DATASET_DIR"])` |
-| `save_pretrained("qwen_lora")` | `save_pretrained(OUT / "adapter")` |
-| `push_to_hub(..., token=...)` | automatic verified publish to your own store |
-| manual `rm -rf` between runs | automatic, refuses when unsafe |
+| Unsloth notebook | In a kernel | Submitted |
+| --- | --- | --- |
+| `from_pretrained("unsloth/Qwen3.5-0.8B")` | `from_pretrained(run.model_dir)` | `from_pretrained(nawat.model_dir())` |
+| `load_dataset("unsloth/LaTeX_OCR")` | `load_dataset(run.dataset_dir)` | `load_dataset(nawat.dataset_dir())` |
+| `output_dir = "outputs"` | `run.scratch_dir("trainer")` | `tempfile.mkdtemp()` |
+| `save_pretrained("qwen_lora")` | `save_pretrained(run.artifact_dir("adapter"))` | `save_pretrained(nawat.artifact_dir("adapter"))` |
+| `push_to_hub(..., token=...)` | `run.finish()` | automatic on exit 0 |
+| manual `rm -rf` between runs | automatic, refuses when unsafe | same |
 
-**Watch the run from a chart, not scrollback.** Add one line to the trainer —
+The middle and right columns are the same functions: `nawat.model_dir()` reads
+the environment when the executor set one and the open kernel run otherwise. Code
+written against the module-level form runs in both places unchanged.
+
+**Watch the run from a chart, not scrollback.** One argument to the trainer —
 
 ```python
-import nawat.metrics
 trainer = SFTTrainer(..., callbacks = [nawat.metrics.trainer_callback()])
 ```
 
@@ -246,10 +345,13 @@ renders identically long after the weights themselves are gone. Over HTTP:
 `/runs/{id}/metrics`, `/runs/{id}/metrics/stream` (server-sent events), and
 `/metrics/compare?run=a&run=b&name=loss` for overlaying runs on shared axes.
 
+In a kernel, `nawat.trace(run.id)` returns the same series grouped by name,
+ready to hand to matplotlib inline.
+
 Notebooks submit too (`nawat submit explore.ipynb ...`): the notebook is executed
-with nbconvert and the executed copy is archived as the run record. Adapt the
-load cells to the environment variables first, same as above — the pip-install
-cell is unnecessary on a host with Unsloth already installed.
+with nbconvert and the executed copy is archived as the run record. Drop the
+`begin_run`/`finish` cells first — under the executor the run already exists —
+and the pip-install cell is unnecessary on a host with Unsloth already installed.
 
 **Test the adapter — no merge, under two minutes:**
 
@@ -270,22 +372,6 @@ nawat session --stop    # or just walk away: idle teardown releases GPU + disk
 A ~200 MB LoRA against a multi-GB base: merging to test would multiply the
 storage cost per experiment by two orders of magnitude. Serving the base once and
 swapping adapters at runtime makes testing effectively free.
-
----
-
-## In a notebook, interactively
-
-```python
-import nawat
-
-model_dir = nawat.resolve("models/unsloth/Qwen3.5-0.8B")   # staged + held
-data_dir  = nawat.resolve("datasets/unsloth/LaTeX_OCR")
-# ... train exactly as above ...
-nawat.publish(out_dir, "runs/2026-07-28-a91f/adapter")     # upload, verify, reclaim
-```
-
-`resolve` holds the artifact for the lifetime of the kernel; `with
-nawat.holding(...)` scopes it tighter.
 
 ---
 
@@ -313,7 +399,7 @@ nawat.holding(...)` scopes it tighter.
 | `nawat describe ID` | Store a plain-language account of a run in its record |
 | `nawat estimate --model KEY` | Will it fit? VRAM estimate before spending GPU hours |
 | `nawat shard DIR KEY` | Pack a small-file corpus into streamable tar shards |
-| `nawat api` | The control plane and web UI over HTTP (docs at `/docs`) |
+| `nawat api` | The control plane over HTTP (schema at `/docs`) |
 | `nawat check` | Prove this host can store, verify and reclaim |
 | `nawat config` | Configuration in force, credentials redacted |
 
@@ -327,18 +413,37 @@ model changes. `NAWAT_API_TOKEN` enables bearer-token auth; `/health` stays open
 
 ---
 
-## The interface and the agent
+## The Python API
 
-`nawat api` serves a benchtop-instrument web UI at `/ui` — storage, registry, runs
-with a live gold-on-graticule loss trace, submission, serving with chat and image
-input, cross-run comparison, and an Agent view. A failed run's **Diagnose** button
-leads to propose → review diff → apply → resubmit, all on one screen.
+Everything the CLI does, the library does — one implementation, three front
+doors. Beyond the run object above:
+
+| Call | What it does |
+| --- | --- |
+| `nawat.resolve(key)` | Stage an artifact and hold it for the kernel; returns the path |
+| `nawat.holding(*keys)` | The same, scoped to a `with` block |
+| `nawat.publish(dir, key)` | Upload, verify file by file, reclaim the local copy |
+| `nawat.keep(key)` / `release(key)` | Exempt from reclamation, or stop |
+| `nawat.free_space(need)` | Reclaim least-recently-used space, refusing when unsafe |
+| `nawat.status()` / `artifacts()` | Occupancy against the ceiling; what is on disk |
+| `nawat.verify(key)` | Compare the local copy against its replica |
+| `nawat.history()` / `run_record(id)` / `trace(id)` | Run history, one record, its metric series |
+
+Errors are typed and carry a remedy: `NotFound`, `InsufficientSpace`,
+`StoreUnavailable`, `VerificationFailed`, `Protected`, `Offline`, `InvalidKey`,
+all deriving from `NawatError` with `.cause` and `.remedy`.
+
+## The agent
 
 The agent is optional and never autonomous (`NAWAT_AGENT_BACKEND=claude` for the
 Claude Agent SDK — confined read-only to the workspace — or `local` for any
 OpenAI-compatible endpoint, fully on-premises). Every proposal passes a syntax
 gate and a VRAM estimate before it is even offered, and reaches the workspace
-only through your approval, committed to git with its prompt and backend.
+only through your approval, committed to git with its prompt and backend:
+
+```bash
+nawat agent "the run OOMed at step 40; halve the memory it needs" --run <id>
+```
 
 ---
 
