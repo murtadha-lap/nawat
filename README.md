@@ -1,5 +1,7 @@
 <div align="center">
 
+<a href="https://rustfs.com"><img src="https://github.com/rustfs.png" alt="RustFS logo" width="72"></a>
+
 <img src="docs/image.png" alt="Nawāt logo" width="280">
 
 ### Train locally. Store durably. Reproduce every run.
@@ -23,7 +25,8 @@
 </p>
 
 <p>
-  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="#installation"><strong>Setup</strong></a> ·
+  <a href="#python-examples"><strong>Python examples</strong></a> ·
   <a href="#first-experiment-qwen35-08b"><strong>Train a model</strong></a> ·
   <a href="#use-nawāt-in-an-unsloth-notebook"><strong>Unsloth notebook</strong></a> ·
   <a href="#inference-with-nawāt-and-vllm"><strong>Run with vLLM</strong></a> ·
@@ -47,24 +50,6 @@ vLLM inference.
 
 > The Python package and CLI command are `nawat`. **Nawāt** (نواة) means
 > “nucleus”—the small core coordinating the research workflow.
-
-## Clone the repository
-
-```bash
-git clone https://github.com/murtadha-lap/nawat.git
-cd nawat
-
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U uv
-uv pip install -e ".[notebook]"
-```
-
-Confirm that the CLI is installed:
-
-```bash
-nawat --help
-```
 
 ## The research problem
 
@@ -114,34 +99,6 @@ models + datasets → bounded cache → Unsloth training → verified adapter �
                            ↕
                S3-compatible object storage
 ```
-
-## Quick start
-
-```bash
-# Install Nawāt from this checkout
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U uv
-uv pip install -e ".[notebook]"
-
-# Configure and verify storage
-cp .env.example .env
-$EDITOR .env
-nawat check --create-bucket
-
-# Submit a cheap smoke test from your workspace
-nawat submit train_latex_ocr.py \
-  --model models/unsloth/Qwen3.5-0.8B \
-  --dataset datasets/unsloth/LaTeX_OCR \
-  --param max_steps=3 \
-  --param learning_rate=2e-4 \
-  --param rank=16 \
-  --param export=none
-```
-
-The sections below cover the complete installation, GPU checks, storage setup,
-training workflow, adapter publishing, vLLM inference, cache management, and
-common failure modes.
 
 ## What Nawāt manages
 
@@ -197,20 +154,42 @@ The tested workstation has an RTX 5060 Ti with 16 GB VRAM. Unsloth documents
 approximate BF16 LoRA use of 3 GB for Qwen3.5-0.8B, 5 GB for 2B, and 10 GB for
 4B; real usage also depends on sequence length, batch size, and trainable layers.
 
-## Install from this repository
+## Installation
 
-### 1. Create the training environment
+Follow these steps once, in order. The training examples later in this README
+reuse this environment and configuration instead of repeating the installation.
+
+### 1. Clone Nawāt
 
 ```bash
-cd /path/to/nawat
+git clone https://github.com/murtadha-lap/nawat.git
+cd nawat
+```
 
+### 2. Create the Python environment and install Nawāt
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U uv
 uv pip install -e ".[notebook]"
 ```
 
-### 2. Install Unsloth
+Confirm that the CLI entry point is available:
+
+```bash
+nawat --help
+```
+
+This prints the available commands without starting a server or changing any
+files. Use `nawat COMMAND --help`, for example `nawat resolve --help`, to see a
+command's arguments. The full command guide is in [CLI help](#cli-help).
+
+### 3. Install Unsloth
+
+Installation reference: [official Unsloth pip guide](https://docs.unsloth.ai/get-started/installing-%2B-updating/pip-install).
+
+The following is the tested dependency set for the included Qwen3.5 example:
 
 ```bash
 uv pip install "torch==2.8.0" "triton>=3.3.0" numpy pillow torchvision \
@@ -236,7 +215,7 @@ uv pip install --no-deps "apache-tvm-ffi==0.1.9" "tilelang==0.1.8"
 On an older GPU such as a T4, skip TileLang and set `FLA_TILELANG=0` before
 importing Unsloth. The included notebook preflight handles this automatically.
 
-### 3. Verify the GPU
+### 4. Verify the GPU
 
 ```bash
 nvidia-smi
@@ -255,9 +234,41 @@ PY
 
 Do not train until `torch.cuda.is_available()` is `True`.
 
-## Configure storage
+### 5. Start RustFS with Docker
 
-### 1. Create `.env`
+RustFS provides the S3-compatible durable store used in the examples. See the
+[official RustFS Docker installation guide](https://docs.rustfs.com/installation/docker/)
+for production, Docker Compose, TLS, and multi-node deployments.
+
+For a local single-node setup:
+
+```bash
+mkdir -p rustfs/data rustfs/logs
+sudo chown -R 10001:10001 rustfs/data rustfs/logs
+
+docker run -d \
+  --name nawat-rustfs \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -v "$PWD/rustfs/data:/data" \
+  -v "$PWD/rustfs/logs:/logs" \
+  -e RUSTFS_ACCESS_KEY=rustfsadmin \
+  -e RUSTFS_SECRET_KEY=change-me-before-first-use \
+  -e RUSTFS_CONSOLE_ENABLE=true \
+  rustfs/rustfs:latest \
+  /data
+
+docker logs nawat-rustfs
+```
+
+RustFS runs as UID/GID `10001:10001`, which is why the mounted directories are
+given that owner. The S3 endpoint is `http://127.0.0.1:9000`; the web console is
+`http://127.0.0.1:9001`. Replace the example secret before any non-local use.
+
+If an S3-compatible service is already available, skip this step and use its
+endpoint and credentials below.
+
+### 6. Create `.env`
 
 ```bash
 cp .env.example .env
@@ -269,8 +280,8 @@ At minimum:
 ```dotenv
 NAWAT_S3_ENDPOINT=http://127.0.0.1:9000
 NAWAT_S3_BUCKET=nawat
-NAWAT_S3_ACCESS_KEY=your-access-key
-NAWAT_S3_SECRET_KEY=your-secret-key
+NAWAT_S3_ACCESS_KEY=rustfsadmin
+NAWAT_S3_SECRET_KEY=change-me-before-first-use
 
 NAWAT_CACHE_ROOT=/home/you/nawat/cache
 NAWAT_WORKSPACE=/home/you/nawat/workspace
@@ -286,7 +297,7 @@ NAWAT_MIN_FREE=10GB
 chmod 600 .env
 ```
 
-### 2. Make `.env` visible from the workspace
+### 7. Make `.env` visible from the workspace
 
 Nawāt loads the nearest `.env` at or above the current directory. If the
 workspace is outside the cloned repository, link the same configuration above
@@ -304,7 +315,7 @@ shell or service is:
 export NAWAT_ENV_FILE=/absolute/path/to/nawat/.env
 ```
 
-### 3. Test storage from the workspace
+### 8. Test storage from the workspace
 
 ```bash
 cd ~/nawat/workspace
@@ -314,6 +325,96 @@ nawat check --create-bucket
 
 Confirm the displayed `env_file`, endpoint, bucket, cache root, and workspace.
 `nawat check` performs a real write/list/verify/delete round trip.
+
+## Python examples
+
+Each feature below is a standalone example. Run it after completing the setup
+steps above. Artifact keys always start with `models/`, `datasets/`, or `runs/`.
+
+### Load a model
+
+`nawat.resolve()` checks the local cache, then RustFS or another configured
+object store, then Hugging Face. It returns an ordinary local path.
+
+```python
+import nawat
+from unsloth import FastVisionModel
+
+model_path = nawat.resolve("models/unsloth/Qwen3.5-0.8B")
+model, tokenizer = FastVisionModel.from_pretrained(
+    str(model_path),
+    load_in_4bit=False,
+    use_gradient_checkpointing="unsloth",
+)
+```
+
+The first resolution downloads and publishes the model. Later resolutions use
+the local cache or restore the verified copy from object storage.
+
+### Load a dataset
+
+Dataset keys follow the same resolution order, but are fetched from Hugging
+Face as dataset repositories.
+
+```python
+import nawat
+from datasets import load_dataset
+
+dataset_path = nawat.resolve("datasets/unsloth/LaTeX_OCR")
+dataset = load_dataset(str(dataset_path), split="train")
+print(dataset[0])
+```
+
+### Publish (push) a model or adapter
+
+`nawat.publish()` uploads a directory, verifies every file, and removes the
+source directory only after verification. Set `keep_local=True` to adopt the
+source into Nawāt's managed cache instead of reclaiming it.
+
+```python
+import nawat
+
+result = nawat.publish(
+    "./trained-model",
+    "models/my-lab/qwen3.5-latex-v1",
+    keep_local=True,
+)
+print(f"Published {result.key}: {result.verification.local_bytes} bytes")
+```
+
+Use a run key for an adapter:
+
+```python
+import nawat
+
+result = nawat.publish(
+    "./qwen-lora",
+    "runs/latex-ocr-v1/adapter",
+)
+print(f"Published {result.key}")
+```
+
+The equivalent CLI command is:
+
+```bash
+nawat publish ./trained-model models/my-lab/qwen3.5-latex-v1 --keep
+```
+
+### Publish a dataset
+
+```python
+import nawat
+
+result = nawat.publish(
+    "./prepared-dataset",
+    "datasets/my-lab/latex-ocr-v1",
+    keep_local=True,
+)
+print(f"Published {result.key}")
+```
+
+For a directory containing many small files, use `nawat shard` as shown in
+[Large datasets](#large-datasets).
 
 ## First experiment: Qwen3.5-0.8B
 
@@ -484,6 +585,9 @@ The storage-specific pattern is small:
 
 ```python
 import nawat
+from datasets import load_dataset
+from trl import SFTConfig, SFTTrainer
+from unsloth import FastVisionModel
 
 run = nawat.begin_run(
     model="models/unsloth/Qwen3.5-2B",
@@ -501,13 +605,14 @@ model, tokenizer = FastVisionModel.from_pretrained(
 dataset = load_dataset(run.dataset_dir, split="train")
 
 trainer = SFTTrainer(
-    ...,
+    model=model,
+    train_dataset=dataset,
     callbacks=[run.callback()],
     args=SFTConfig(
         max_steps=run.param("max_steps", 30),
         learning_rate=run.param("learning_rate", 2e-4),
         output_dir=str(run.scratch_dir("trainer")),
-        ...,
+        # Add the remaining SFTConfig options for your model here.
     ),
 )
 trainer.train()
@@ -860,27 +965,47 @@ Try these in order:
 4. Use Qwen3.5-0.8B or 2B instead of 4B.
 5. Stop any inference session with `nawat session --stop`.
 
-## Command reference
+## CLI help
 
-| Command | Purpose |
+Start with:
+
+```bash
+nawat --help
+```
+
+This command is read-only. It shows the global options and all top-level
+commands. Add `--help` after a command for its positional arguments and flags:
+
+```bash
+nawat resolve --help
+nawat publish --help
+nawat submit --help
+```
+
+The global options apply before the subcommand:
+
+| Option | Meaning |
 | --- | --- |
-| `nawat config` | Effective configuration with credentials redacted |
-| `nawat check` | Validate cache and object-storage operations |
-| `nawat status` | Cache, disk, and protected-byte summary |
-| `nawat ls` | Locally cached artifacts |
-| `nawat registry` | Object-storage artifacts |
-| `nawat resolve KEY` | Stage an artifact and print its path |
-| `nawat keep KEY` / `release KEY` | Pin or unpin a local artifact |
-| `nawat free` | Safe LRU reclamation |
-| `nawat publish DIR KEY` | Upload, verify, and reclaim |
-| `nawat shard DIR KEY` | Pack a small-file corpus into tar shards |
-| `nawat submit SCRIPT ...` | Run a recorded training job |
-| `nawat runs` / `run ID` | List runs or inspect one record |
-| `nawat logs ID -f` | Follow trainer output |
-| `nawat metrics ID -f` | Follow the metric trace |
-| `nawat serve KEY` | Start vLLM for a base model |
-| `nawat adapter KEY --name NAME` | Hot-load a compatible LoRA |
-| `nawat session` | Inspect or stop the inference server |
+| `--cache-root PATH` | Override `NAWAT_CACHE_ROOT` for this invocation |
+| `--ceiling SIZE` | Override `NAWAT_CACHE_CEILING`, for example `80GB` |
+| `--env-file PATH` | Load a specific configuration file |
+| `--no-env-file` | Ignore `.env` and use only the process environment |
+
+Commands are grouped here by task so the list is easier to scan:
+
+| Task | Commands | What they do |
+| --- | --- | --- |
+| Setup | `config`, `check` | Show effective configuration and verify storage end to end |
+| Find artifacts | `status`, `ls`, `registry`, `path` | Inspect disk usage and local or remote artifacts |
+| Move artifacts | `resolve`, `add`, `publish`, `verify` | Stage, adopt, upload, or verify model and dataset directories |
+| Protect space | `keep`, `release`, `leases`, `free`, `rm` | Protect live data and safely reclaim local storage |
+| Execute work | `hold`, `submit`, `scripts` | Stage inputs and run commands, scripts, or notebooks |
+| Inspect runs | `runs`, `run`, `logs`, `metrics`, `cancel` | Monitor history, output, metrics, or stop a run |
+| Inference and evaluation | `serve`, `session`, `adapter`, `eval` | Serve a base, hot-load LoRA, and score a run |
+| Utilities | `estimate`, `shard`, `lab`, `api` | Estimate VRAM, shard data, open JupyterLab, or run the API |
+
+`pin`, `unpin`, and `collect` remain available as aliases for `keep`, `release`,
+and `free` respectively.
 
 ## Safety model
 
@@ -897,18 +1022,12 @@ artifacts.
 
 ## Development
 
-```bash
-git clone https://github.com/murtadha-lap/nawat.git
-cd nawat
-python3 -m venv .venv
-.venv/bin/pip install -e ".[notebook,api]"
-```
-
-Run the CLI directly from the editable checkout:
+After completing setup steps 1 and 2, add the API development dependencies:
 
 ```bash
-.venv/bin/nawat --help
+uv pip install -e ".[notebook,api]"
 ```
+
 
 ## License
 
