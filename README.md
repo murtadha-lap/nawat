@@ -18,6 +18,9 @@
   <img alt="NVIDIA CUDA" src="https://img.shields.io/badge/compute-NVIDIA%20CUDA-76B900?logo=nvidia&logoColor=white">
   <img alt="vLLM" src="https://img.shields.io/badge/inference-vLLM-0EA5E9">
   <img alt="LoRA" src="https://img.shields.io/badge/adapters-LoRA-14B8A6">
+</p>
+
+<p>
   <img alt="S3-compatible storage" src="https://img.shields.io/badge/storage-S3--compatible-FF9900?logo=amazons3&logoColor=white">
   <a href="https://rustfs.com"><img alt="RustFS" src="https://img.shields.io/badge/storage-RustFS-00AEEF?logo=rust&logoColor=white"></a>
   <img alt="Local-first" src="https://img.shields.io/badge/workflow-local--first-22C55E">
@@ -136,6 +139,7 @@ If it cannot free space safely, it stops and explains what is holding the disk.
 | --- | --- |
 | [`examples/latex_ocr_qwen3_5_vision.ipynb`](examples/latex_ocr_qwen3_5_vision.ipynb) | Interactive Qwen3.5 vision fine-tuning notebook |
 | [`examples/train_latex_ocr.py`](examples/train_latex_ocr.py) | The same LaTeX OCR experiment as a submitted run |
+| [`examples/network_monitor.py`](examples/network_monitor.py) | Safe RustFS latency and upload/download throughput test |
 
 The example uses `unsloth/LaTeX_OCR` and can train Qwen3.5-0.8B, Qwen3.5-2B,
 or another compatible Qwen3.5 vision model by changing only the model key.
