@@ -1,7 +1,5 @@
 <div align="center">
 
-<a href="https://rustfs.com"><img src="https://github.com/rustfs.png" alt="RustFS logo" width="72"></a>
-
 <img src="docs/image.png" alt="Nawāt logo" width="280">
 
 ### Train locally. Store durably. Reproduce every run.
@@ -21,6 +19,7 @@
   <img alt="vLLM" src="https://img.shields.io/badge/inference-vLLM-0EA5E9">
   <img alt="LoRA" src="https://img.shields.io/badge/adapters-LoRA-14B8A6">
   <img alt="S3-compatible storage" src="https://img.shields.io/badge/storage-S3--compatible-FF9900?logo=amazons3&logoColor=white">
+  <a href="https://rustfs.com"><img alt="RustFS" src="https://img.shields.io/badge/storage-RustFS-00AEEF?logo=rust&logoColor=white"></a>
   <img alt="Local-first" src="https://img.shields.io/badge/workflow-local--first-22C55E">
 </p>
 
