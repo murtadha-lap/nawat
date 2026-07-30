@@ -539,6 +539,100 @@ nawat submit train_latex_ocr.py \
   --notes "Qwen3.5-2B LaTeX OCR baseline"
 ```
 
+## Complete `nawat submit` reference
+
+The general command shape is:
+
+```bash
+nawat submit SCRIPT [OPTIONS]
+```
+
+### Submission options
+
+| Argument | Accepted value | Required for this example | Purpose |
+| --- | --- | --- | --- |
+| `SCRIPT` | A `.py` or `.ipynb` path inside `NAWAT_WORKSPACE` | Yes | Training program to execute |
+| `--model KEY` | One `models/...` artifact key | Yes | Base model staged as `nawat.model_dir()` |
+| `--dataset KEY` | A `datasets/...` key; option may be repeated | At least one | Dataset paths exposed through `nawat.dataset_dir()` and `dataset_dirs()` |
+| `--input KEY` | Any additional artifact key; option may be repeated | No | Stage extra inputs that are neither the primary model nor datasets |
+| `--param NAME=VALUE` | A name/value pair; option may be repeated | No | Record a parameter and expose it through `nawat.param()` |
+| `--notes TEXT` | Any quoted text | No | Explain why the run exists |
+| `--run-id ID` | A unique run identifier | No | Use a chosen ID instead of an automatically generated one |
+| `--queue` | Flag with no value | No | Enqueue the run for the control plane instead of running immediately |
+
+`--dataset`, `--input`, and `--param` are repeatable. If the same parameter name
+is supplied more than once, the last value wins. Unknown parameter names are
+recorded in the run but ignored unless the training script reads them.
+
+### Parameters supported by `train_latex_ocr.py`
+
+| Parameter | Type | Default | Accepted values | Effect |
+| --- | --- | ---: | --- | --- |
+| `max_steps` | Integer | `30` | Positive integer; useful examples: `3`, `30`, `100`, `500` | Maximum optimizer steps. Higher values take longer and usually improve convergence until overfitting begins. |
+| `learning_rate` | Float | `2e-4` | Positive float; common range `1e-5` to `2e-4` | AdamW learning rate. The baseline uses `1e-4`. |
+| `rank` | Integer | `16` | Positive integer; commonly `8`, `16`, `32`, or `64` | LoRA rank. The script also sets `lora_alpha` to the same value. Higher ranks use more VRAM and create larger adapters. |
+| `export` | String | Empty (adapter only) | `none`, `merged`, `gguf`, or `merged,gguf` | Selects large deployment artifacts in addition to the always-published adapter. |
+| `quantization` | String | `q4_k_m` | One GGUF choice listed below | GGUF quantization method; read only when `export` includes `gguf`. |
+
+Values arrive through the CLI as strings. `nawat.param()` automatically converts
+`max_steps` and `rank` to integers and `learning_rate` to a float because their
+defaults in the script have those types.
+
+### `export` choices
+
+| Value | Published artifacts | When to use it |
+| --- | --- | --- |
+| Omitted, empty, or `none` | `adapter` | Recommended for Nawāt + vLLM; smallest and fastest output |
+| `merged` | `adapter`, `merged` | A standalone Hugging Face-format merged model is required |
+| `gguf` | `adapter`, `merged`, `gguf` | llama.cpp or Ollama needs a GGUF file; GGUF conversion requires merged weights first |
+| `merged,gguf` | `adapter`, `merged`, `gguf` | Accepted explicit form; produces the same artifact classes as `gguf` |
+
+Merged and GGUF exports can each be approximately as large as the base model.
+The adapter is always saved, even if optional export conversion fails.
+
+### `quantization` choices
+
+The installed Unsloth version accepts these values. Use lowercase spelling:
+
+```text
+not_quantized  fast_quantized  quantized
+f32            bf16            f16             q8_0
+q6_k           q5_k_m          q5_k_s          q5_k
+q5_0           q5_1            q4_k_m          q4_k_s
+q4_k           q4_0            q4_1            q3_k_l
+q3_k_m         q3_k_s          q3_k_xs         q2_k
+q2_k_l
+```
+
+The three preset names map to a concrete format:
+
+| Preset | Actual format | Trade-off |
+| --- | --- | --- |
+| `not_quantized` | Model-native `f16` or `bf16` | Highest fidelity, largest file |
+| `fast_quantized` | `q8_0` | Fast conversion and high quality, but larger |
+| `quantized` | `q4_k_m` | Smaller file and fast inference |
+
+`q4_k` is an alias for `q4_k_m`; `q5_k` is an alias for `q5_k_m`. For this
+example, start with the default `q4_k_m`. GGUF support depends on the model
+architecture and the installed Unsloth/llama.cpp version; a GGUF conversion
+error is reported but does not discard the successfully trained adapter.
+
+### Export examples
+
+Keep the baseline adapter-only by using `--param export=none`. To publish merged
+weights instead, use:
+
+```bash
+--param export=merged
+```
+
+To publish GGUF with the default recommended quantization, use both:
+
+```bash
+--param export=gguf \
+--param quantization=q4_k_m
+```
+
 ## Why training parameters belong to the run
 
 In a notebook:
