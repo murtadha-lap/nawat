@@ -1,14 +1,15 @@
 # Examples
 
-The same fine-tune, three ways. Start with the notebook; move to the script when
-the experiment is worth six hours.
+Training examples and storage diagnostics. Start with the notebook; move to the
+script when the experiment is worth a longer unattended run.
 
 | File | What it is |
 | --- | --- |
 | [latex_ocr_qwen3_5_vision.ipynb](latex_ocr_qwen3_5_vision.ipynb) | The Unsloth vision notebook — Qwen3.5-0.8B on `unsloth/LaTeX_OCR` — driven from a kernel as a recorded run |
 | [train_latex_ocr.py](train_latex_ocr.py) | The same body as a script, for `nawat submit` |
+| [network_monitor.py](network_monitor.py) | Benchmark the configured RustFS connection with automatic test-object cleanup |
 
-Neither has an install cell. Set the environment up once —
+The training examples do not have an install cell. Set the environment up once —
 [Installation](../README.md#installation) covers Nawāt, Unsloth (to train) and
 vLLM (to serve) — then configure the store:
 
@@ -20,6 +21,24 @@ nawat check --create-bucket
 After that the notebook opens and runs. Its first cell is a preflight: it reports
 the versions it found and the GPU it is on, and stops with a clear message rather
 than a deep `ImportError` if something is missing.
+
+## Test RustFS network speed
+
+From the repository root, run the safe default test (three 256 MiB rounds):
+
+```bash
+python examples/network_monitor.py
+```
+
+Choose a larger payload or more rounds when needed:
+
+```bash
+python examples/network_monitor.py --size 1GiB --rounds 5
+```
+
+The test reports TCP and authenticated S3 latency plus upload/download speed. It
+uses a unique `runs/nawat-speed-test-*` object and deletes it in a `finally`
+cleanup, including when the transfer is interrupted.
 
 ## The three changed lines
 
