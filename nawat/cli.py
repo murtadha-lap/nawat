@@ -1012,7 +1012,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--notes", help="why this run exists")
     p.add_argument("--name", metavar="NAME",
                    help="what to call this run in object storage; asked for at the end if omitted")
-    p.add_argument("--no-name", action="store_true", help="do not ask for a name; publish under the run id")
+    p.add_argument("--no-name", action="store_true", help="do not ask for a name at the end; publish under the run id")
     p.add_argument("--run-id", help="identify this run; generated if omitted")
     p.add_argument("--queue", action="store_true", help="enqueue for the control plane instead of running here")
     p.add_argument("--checkpoint-lineage", metavar="NAME",
