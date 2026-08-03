@@ -148,7 +148,9 @@ or another compatible Qwen3.5 vision model by changing only the model key.
 
 ## Requirements
 
-- Linux and Python 3.11+
+- Linux and Python 3.11+ — `uv` installs the interpreter if the machine lacks one
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.5 or newer:
+  `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - An NVIDIA GPU supported by Torch and the selected model
 - A working NVIDIA driver (`nvidia-smi` must succeed)
 - CUDA 12.8 toolkit for building the documented Qwen3.5 extensions
@@ -173,24 +175,63 @@ cd nawat
 
 ### 2. Create the Python environment and install Nawāt
 
+Nawāt is a [uv](https://docs.astral.sh/uv/) project. One command reads
+`pyproject.toml`, `uv.lock` and `.python-version`, fetches the right interpreter
+if the machine does not have it, and builds `.venv` to match the lockfile
+exactly:
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U uv
-uv pip install -e ".[notebook]"
+uv sync --extra notebook
 ```
 
-Confirm that the CLI entry point is available:
+There is no `activate` step — `uv run` uses the project environment wherever you
+are:
 
 ```bash
-nawat --help
+uv run nawat --help
 ```
 
 This prints the available commands without starting a server or changing any
-files. Use `nawat COMMAND --help`, for example `nawat resolve --help`, to see a
-command's arguments. The full command guide is in [CLI help](#cli-help).
+files. Use `uv run nawat COMMAND --help`, for example `uv run nawat resolve
+--help`, to see a command's arguments. The full command guide is in
+[CLI help](#cli-help).
+
+| Command | What it does |
+| --- | --- |
+| `uv sync` | Build `.venv` from `uv.lock`, exactly |
+| `uv sync --extra notebook` | Add `huggingface_hub` and `matplotlib` for notebook work |
+| `uv sync --extra api` | Add FastAPI and Uvicorn for the control plane |
+| `uv run nawat ...` | Run the CLI in the project environment |
+| `uv add PACKAGE` | Add a dependency and update the lockfile |
+| `uv lock --upgrade` | Re-resolve everything to the newest compatible versions |
+| `uv build` | Build the wheel and source distribution into `dist/` |
+
+`uv.lock` is committed, so the same command on another Linux box produces the
+same environment down to the version of every transitive dependency. Activating
+`.venv` by hand and calling `nawat` directly still works if you prefer it.
+
+To use the storage CLI on a machine that is not doing the training — a laptop
+that inspects the bucket, a second workstation — install it as a standalone tool
+instead of cloning:
+
+```bash
+uv tool install git+https://github.com/murtadha-lap/nawat.git
+nawat status
+```
+
+Or run it once without installing anything at all:
+
+```bash
+uvx --from git+https://github.com/murtadha-lap/nawat.git nawat registry
+```
 
 ### 3. Install Unsloth
+
+Torch, Unsloth and vLLM are deliberately **not** dependencies of Nawāt. They are
+gigabytes of CUDA-specific wheels whose correct combination depends on the card
+in the machine, and nothing in the package imports them — the trainer and the
+inference server are subprocesses. So they are installed into the same
+environment rather than locked with the project:
 
 Installation reference: [official Unsloth pip guide](https://docs.unsloth.ai/get-started/installing-%2B-updating/pip-install).
 
@@ -219,6 +260,22 @@ uv pip install --no-deps "apache-tvm-ffi==0.1.9" "tilelang==0.1.8"
 
 On an older GPU such as a T4, skip TileLang and set `FLA_TILELANG=0` before
 importing Unsloth. The included notebook preflight handles this automatically.
+
+> **Keep the two worlds from fighting.** `uv pip install` puts packages in the
+> environment without touching `uv.lock`, which is what you want here — but a
+> later `uv sync` moves every package that *is* in the lock to its locked
+> version, and some of them are shared. vLLM pins `fastapi`, `uvicorn` and
+> `websockets`; Torch and Unsloth care about `numpy` and `fsspec`. On a machine
+> that trains, prefer:
+>
+> ```bash
+> uv sync --inexact            # never remove what uv pip installed
+> uv pip install -e .          # or just refresh Nawāt itself, moving nothing
+> ```
+>
+> `uv sync --dry-run` prints exactly what would change before anything does.
+> This does not apply to a machine that only manages storage, where a plain
+> `uv sync` is the right command.
 
 ### 4. Verify the GPU
 
@@ -676,8 +733,7 @@ Open the included notebook:
 
 ```bash
 cd /absolute/path/to/nawat
-source .venv/bin/activate
-nawat lab
+uv run nawat lab
 ```
 
 The storage-specific pattern is small:
@@ -1240,12 +1296,17 @@ removed when a run succeeds, or when you ask.
 
 ## Development
 
-After completing setup steps 1 and 2, add the API development dependencies:
-
 ```bash
-uv pip install -e ".[notebook,api]"
+uv sync --all-extras          # every optional dependency, plus the dev group
+uv run pyflakes nawat         # lint
+uv run nawat check            # exercise the real storage path
+uv build                      # wheel and sdist into dist/
 ```
 
+`uv sync` installs the `dev` dependency group by default; `--no-dev` leaves it
+out. Dependencies live in `pyproject.toml` and are resolved into `uv.lock` —
+edit through `uv add` / `uv remove` rather than by hand, and commit the lockfile
+with the change.
 
 ## License
 
