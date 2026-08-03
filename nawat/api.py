@@ -25,6 +25,8 @@ from pydantic import BaseModel, Field
 from . import metrics
 from .cache import Cache, open_cache
 from .config import Config
+from . import checkpoints as checkpoint_store
+from .checkpoints import CheckpointPolicy
 from .errors import NawatError
 from .executor import Executor, RunQueue, process_alive
 from .health import run_checks
@@ -47,6 +49,11 @@ class SubmitBody(BaseModel):
     params: dict[str, str] = Field(default_factory=dict)
     notes: str = ""
     run_id: str | None = None
+    name: str | None = Field(default=None, description="Folder in object storage; the run id if unset")
+    checkpoint_lineage: str = Field(default="", description="Derived from the script and inputs if empty")
+    resume: bool = Field(default=True, description="Continue from this lineage's newest checkpoint")
+    keep_checkpoints: bool = Field(default=False, description="Keep them on local disk after success")
+    publish_checkpoints: bool = Field(default=True, description="Replicate the last one to object storage")
 
     def to_spec(self) -> RunSpec:
         return RunSpec(
@@ -56,6 +63,12 @@ class SubmitBody(BaseModel):
             inputs=tuple(Key.parse(k) for k in self.inputs),
             params=dict(self.params),
             notes=self.notes,
+            checkpoints=CheckpointPolicy(
+                lineage=self.checkpoint_lineage,
+                resume=self.resume,
+                keep=self.keep_checkpoints,
+                publish=self.publish_checkpoints,
+            ),
         )
 
 
@@ -117,7 +130,7 @@ class Platform:
         rebuild_from_disk(self.runs)
         # Nothing survives a restart of the platform mid-run; say so rather than
         # leaving a record stuck in "running" forever.
-        self.runs.reconcile(process_alive)
+        self.runs.reconcile(process_alive, checkpoint_root=self.config.checkpoint_root)
         if self._start_queue:
             self.queue.start()
 
@@ -238,6 +251,14 @@ def create_app(
             "kept": [{"key": str(k), "reason": r} for k, r in result.skipped],
         }
 
+    @app.get("/checkpoints", dependencies=guard)
+    def checkpoints(lineage: str | None = Query(default=None)) -> list[dict[str, Any]]:
+        """What can be resumed. Disk that the cache will never reclaim on its own."""
+        found = checkpoint_store.lineages(platform.config.checkpoint_root)
+        if lineage:
+            found = [item for item in found if item.name == lineage]
+        return [item.to_json() for item in found]
+
     @app.post("/cache/publish", dependencies=guard)
     def publish(body: PublishBody) -> dict[str, Any]:
         result = platform.cache.publish(body.directory, body.key, keep_local=body.keep_local)
@@ -327,7 +348,7 @@ def create_app(
 
     @app.post("/runs", status_code=201, dependencies=guard)
     def submit(body: SubmitBody) -> dict[str, Any]:
-        record = platform.queue.submit(body.to_spec(), body.run_id)
+        record = platform.queue.submit(body.to_spec(), body.run_id, name=body.name)
         return record.to_json()
 
     @app.get("/runs", dependencies=guard)
@@ -611,6 +632,8 @@ def _status_json(cache: Cache) -> dict[str, Any]:
         "unreplicated_bytes": status.unreplicated_bytes,
         "disk_free": status.disk_free,
         "disk_total": status.disk_total,
+        "checkpoint_bytes": status.checkpoint_bytes,
+        "checkpoint_bytes_human": human_bytes(status.checkpoint_bytes),
     }
 
 

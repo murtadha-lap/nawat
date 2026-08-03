@@ -36,13 +36,16 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from . import checkpoints as checkpoint_store
 from . import metrics
 from .cache import Cache
+from .checkpoints import CheckpointPolicy
 from .errors import InvalidKey, NawatError, NotFound, Protected
 from .executor import param_env_name, publish_outputs, publish_record, run_output_dir
 from .hub import OFFLINE_VARS
@@ -201,17 +204,67 @@ class Run:
         return path
 
     def scratch_dir(self, name: str = "trainer") -> Path:
-        """Scratch space that will *not* be published, and is cleaned up at the end.
+        """Scratch space that will *not* be published, and is deleted at the end.
 
-        Trainer checkpoints belong here: they are intermediate state, and
-        writing them under :attr:`out_dir` would publish gigabytes of them as an
-        artifact class of their own.
+        For working files a later run has no use for: a tokenised copy of the
+        corpus, an intermediate export, a merge staging area. Deleted when the
+        run ends, however it ends.
+
+        Trainer checkpoints do **not** belong here — put them in
+        :attr:`checkpoint_dir`, which survives the run, so a failure at hour 60
+        costs an hour instead of the whole thing.
         """
         path = self.cache.config.staging_root / f"scratch-{self.id}-{name}"
         path.mkdir(parents=True, exist_ok=True)
         if path not in self._scratch:
             self._scratch.append(path)
         return path
+
+    # -- checkpoints -------------------------------------------------------
+
+    @property
+    def lineage(self) -> str:
+        """The checkpoint lineage this run trains into. Shared with every run of
+        the same script over the same inputs, which is what lets one resume
+        another."""
+        return self.spec.checkpoint_lineage
+
+    @property
+    def checkpoint_dir(self) -> Path:
+        """Where the trainer should write checkpoints — durable across runs.
+
+            SFTConfig(**nawat.checkpoint_args(save_steps=250), ...)
+
+        Unlike :meth:`scratch_dir` and :attr:`out_dir`, nothing removes this
+        when the run ends badly. It is the only copy of a partly trained model,
+        and unlike every artifact in the cache it cannot be fetched again.
+        """
+        path = checkpoint_store.lineage_dir(self.cache.config, self.lineage)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @property
+    def resume_from(self) -> str | None:
+        """The checkpoint to continue from, or None to start at step 0.
+
+            trainer.train(resume_from_checkpoint=run.resume_from)
+        """
+        if not self.spec.checkpoints.resume:
+            return None
+        newest = checkpoint_store.latest(self.checkpoint_dir)
+        return str(newest.path) if newest else None
+
+    @property
+    def checkpoints(self) -> list[checkpoint_store.Checkpoint]:
+        """Every checkpoint in this run's lineage, oldest step first."""
+        return checkpoint_store.read(self.checkpoint_dir)
+
+    def _prepare_checkpoints(self) -> None:
+        directory = checkpoint_store.lineage_dir(self.cache.config, self.lineage)
+        if not self.spec.checkpoints.resume:
+            checkpoint_store.discard(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        checkpoint_store.note_owner(directory, self.id, self.spec.script)
 
     # -- parameters --------------------------------------------------------
 
@@ -252,16 +305,22 @@ class Run:
 
     # -- finishing ---------------------------------------------------------
 
-    def finish(self, *, description: str | None = None) -> RunRecord:
+    def finish(self, *, description: str | None = None, name: str | None = None) -> RunRecord:
         """Publish everything under :attr:`out_dir`, then release the inputs.
 
         Each subdirectory is uploaded, verified file by file, and reclaimed from
         local disk — the same path a submitted script takes on exit 0.
+
+        ``name`` files the artifacts under ``runs/<name>/`` in object storage
+        instead of ``runs/<id>/``, which is worth doing at the end of a run that
+        turned out to be worth keeping.
         """
         self._require_active()
+        if name:
+            self.record = self.runs.update(self.id, name=name)
         self.record = self.runs.update(self.id, state=RunState.PUBLISHING)
         try:
-            artifacts = publish_outputs(self.cache, self.id, self.out_dir)
+            artifacts = publish_outputs(self.cache, self.record.publish_prefix, self.out_dir)
         except BaseException as exc:  # noqa: BLE001 - a failed publish is a failed run
             self.fail(f"Publishing failed: {exc}")
             raise
@@ -275,18 +334,22 @@ class Run:
             artifacts=artifacts,
             **({"description": description} if description is not None else {}),
         )
-        self._settle()
+        self._settle(succeeded=True)
         return self.record
 
     def fail(self, error: str | BaseException) -> RunRecord:
-        """Record the run as failed. Outputs stay on local disk for inspection."""
+        """Record the run as failed. Outputs and checkpoints stay on local disk.
+
+        The checkpoints are the point: the cell can be re-run, and
+        :attr:`resume_from` picks up where the failure interrupted it.
+        """
         self._require_active()
         text = f"{type(error).__name__}: {error}" if isinstance(error, BaseException) else str(error)
         self.log(f"failed: {text}")
         self.record = self.runs.update(
             self.id, state=RunState.FAILED, finished_at=time.time(), error=text
         )
-        self._settle()
+        self._settle(succeeded=False)
         return self.record
 
     def cancel(self) -> RunRecord:
@@ -296,7 +359,7 @@ class Run:
         self.record = self.runs.update(
             self.id, state=RunState.CANCELLED, finished_at=time.time(), error="Cancelled."
         )
-        self._settle()
+        self._settle(succeeded=False)
         return self.record
 
     def close(self) -> None:
@@ -326,11 +389,22 @@ class Run:
                 "Start another with nawat.begin_run(...), or let go of this one with run.close().",
             )
 
-    def _settle(self) -> None:
+    def _settle(self, succeeded: bool) -> None:
         """Clean up, then archive the record — after a transition this run made."""
+        self._record_checkpoints(succeeded)
         self.close()
         self._archive_source()
-        publish_record(self.cache, self.runs, self.id)
+        publish_record(self.cache, self.runs, self.id, self.record.publish_prefix)
+
+    def _record_checkpoints(self, succeeded: bool) -> None:
+        """Keep what a bad ending leaves behind, and note it in the record."""
+        newest = checkpoint_store.settle(
+            checkpoint_store.lineage_dir(self.cache.config, self.lineage),
+            succeeded=succeeded,
+            keep=self.spec.checkpoints.keep,
+            log=self.log,
+        )
+        self.record = self.runs.update(self.id, checkpoint=str(newest.path) if newest else None)
 
     def _archive_source(self) -> None:
         """Keep a copy of the notebook beside the log, when we can find it.
@@ -365,6 +439,9 @@ class Run:
             "NAWAT_WORKSPACE": str(self.cache.config.workspace_root),
             "NAWAT_INPUTS": json.dumps({k: str(v) for k, v in self.inputs.items()}),
             "NAWAT_PARAMS": json.dumps(self.params),
+            "NAWAT_CHECKPOINT_DIR": str(self.checkpoint_dir),
+            "NAWAT_CHECKPOINT_LINEAGE": self.lineage,
+            "NAWAT_RESUME_FROM": self.resume_from or "",
             metrics.ENV_VAR: str(self.metrics_path),
         }
         if self.spec.model is not None:
@@ -422,6 +499,9 @@ def begin_run(
     script: str | None = None,
     offline: bool = True,
     cache: Cache | None = None,
+    checkpoint_lineage: str = "",
+    resume: bool = True,
+    keep_checkpoints: bool = False,
 ) -> Run:
     """Stage the inputs, open a run record, and hold everything for the kernel.
 
@@ -431,6 +511,11 @@ def begin_run(
 
     Set ``offline=False`` only when the kernel itself must reach the internet;
     artifacts always resolve through the cache regardless.
+
+    Checkpoints go to a lineage shared by every run with the same script and
+    inputs, so re-running a notebook after a crash continues from the last saved
+    step. ``resume=False`` starts that lineage over; ``keep_checkpoints=True``
+    holds on to them even after the run succeeds.
     """
     from . import default_cache
 
@@ -457,6 +542,7 @@ def begin_run(
         inputs=tuple(Key.parse(k) for k in inputs),
         params={name: str(value) for name, value in (params or {}).items()},
         notes=notes,
+        checkpoints=CheckpointPolicy(lineage=checkpoint_lineage, resume=resume, keep=keep_checkpoints),
     )
 
     record = runs.create(spec, run_id)
@@ -475,10 +561,14 @@ def begin_run(
         raise
 
     run = Run(cache, runs, record, staged, leases, offline=offline)
+    run._prepare_checkpoints()
     run._apply_env()
     run.log(f"run {run.id} opened in kernel pid {os.getpid()}")
     run.log(f"script  {spec.script}")
     run.log(f"outputs {run.out_dir}")
+    run.log(f"ckpts   {run.checkpoint_dir}")
+    if run.resume_from:
+        run.log(f"resume  {Path(run.resume_from).name} — training continues from there")
     for key, path in staged.items():
         run.log(f"input   {key} -> {path}")
     for name, value in run.params.items():
@@ -543,6 +633,72 @@ def artifact_dir(name: str = "adapter") -> Path:
         path.mkdir(parents=True, exist_ok=True)
         return path
     return require_run().artifact_dir(name)
+
+
+def checkpoint_dir() -> Path:
+    """Where to write trainer checkpoints so that a failed run is not a lost one.
+
+    Durable and shared with the next run of the same script and inputs, which is
+    what makes resuming possible at all. Answers outside the platform too — a
+    script run by hand still gets a real directory — so the same line works
+    under ``nawat submit``, in a notebook, and under plain ``python``.
+    """
+    value = os.environ.get("NAWAT_CHECKPOINT_DIR")
+    if value:
+        path = Path(value)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    run = current_run()
+    if run is not None:
+        return run.checkpoint_dir
+    from . import default_cache
+
+    config = default_cache().config
+    lineage = os.environ.get("NAWAT_CHECKPOINT_LINEAGE") or checkpoint_store.lineage_name(sys.argv[0] or "adhoc")
+    path = checkpoint_store.lineage_dir(config, lineage)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def resume_from() -> str | None:
+    """The checkpoint to continue from, or None to start at step 0.
+
+        trainer.train(resume_from_checkpoint=nawat.resume_from())
+
+    An open run answers before the environment does, so re-running a cell after
+    a failure picks up the checkpoints written since the run was opened, rather
+    than the state of the world when it started.
+    """
+    run = current_run()
+    if run is not None:
+        return run.resume_from
+    value = os.environ.get("NAWAT_RESUME_FROM")
+    if value:
+        return value
+    if "NAWAT_RESUME_FROM" in os.environ:
+        return None  # the executor looked and found nothing; do not look again
+    newest = checkpoint_store.latest(checkpoint_dir())
+    return str(newest.path) if newest else None
+
+
+def checkpoint_args(save_steps: int = 250, save_total_limit: int = 3, **overrides: Any) -> dict[str, Any]:
+    """Trainer arguments that make a long run survivable.
+
+        args = SFTConfig(**nawat.checkpoint_args(save_steps=250), ...)
+        trainer.train(resume_from_checkpoint=nawat.resume_from())
+
+    Saving every N *steps* rather than once an epoch is the whole difference:
+    an epoch over a large corpus can be a day wide, and a crash lands between
+    two of them. ``save_total_limit`` bounds what that costs in disk.
+    """
+    args: dict[str, Any] = {
+        "output_dir": str(checkpoint_dir()),
+        "save_strategy": "steps",
+        "save_steps": save_steps,
+        "save_total_limit": save_total_limit,
+    }
+    args.update(overrides)
+    return args
 
 
 def param(name: str, default: Any = None, cast: Callable[[str], Any] | None = None) -> Any:
@@ -626,9 +782,12 @@ __all__ = [
     "UNKNOWN_SCRIPT",
     "artifact_dir",
     "begin_run",
+    "checkpoint_args",
+    "checkpoint_dir",
     "current_run",
     "dataset_dir",
     "history",
+    "resume_from",
     "model_dir",
     "notebook_path",
     "out_dir",

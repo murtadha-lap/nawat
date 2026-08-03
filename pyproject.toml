@@ -1,6 +1,6 @@
 [project]
 name = "nawat"
-version = "0.1.0"
+version = "0.2.0"
 description = "Fine-tune on a small disk as if it were a big one — object-storage-backed cache, runs and serving for Unsloth"
 readme = "README.md"
 requires-python = ">=3.11"

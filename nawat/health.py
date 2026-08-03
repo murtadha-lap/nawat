@@ -61,6 +61,19 @@ def run_checks(cache: Cache, *, create_bucket: bool = False) -> list[Check]:
         Check("state directory", ok, detail, None if ok else f"Give this user write access to {config.state_dir}.")
     )
 
+    # A checkpoint directory that cannot be written is a long run with nothing
+    # to show for it if anything goes wrong, so it is worth knowing at bring-up
+    # rather than at hour 60.
+    ok, detail = _writable(config.checkpoint_root)
+    checks.append(
+        Check(
+            "checkpoint directory",
+            ok,
+            detail,
+            None if ok else f"Give this user write access to {config.checkpoint_root}, or set NAWAT_CHECKPOINT_ROOT.",
+        )
+    )
+
     try:
         cache.db.connect().execute("SELECT count(*) FROM artifacts").fetchone()
         checks.append(Check("state database", True, str(config.database_path)))

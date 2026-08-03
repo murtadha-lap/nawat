@@ -27,6 +27,16 @@ series and verified publish happen around your cells::
     run.finish()
 
 See :mod:`nawat.notebook`.
+
+A run that fails is not a run that is lost. Checkpoints go to a durable
+directory of their own, are kept when anything but success ends the run, and are
+handed back to the next run of the same script and inputs::
+
+    args = SFTConfig(**nawat.checkpoint_args(save_steps=250), ...)
+    trainer.train(resume_from_checkpoint=nawat.resume_from())
+
+Two lines, and a crash at hour 60 costs the last few minutes rather than the
+whole run. See :mod:`nawat.checkpoints`.
 """
 
 from __future__ import annotations
@@ -35,8 +45,9 @@ import threading
 from pathlib import Path
 from typing import Iterator
 
-from . import metrics
+from . import checkpoints, metrics
 from .cache import ArtifactStatus, Cache, CacheStatus, CollectResult, PublishResult, open_cache
+from .checkpoints import Checkpoint, CheckpointPolicy
 from .config import Config
 from .errors import (
     InsufficientSpace,
@@ -53,12 +64,15 @@ from .notebook import (
     Run,
     artifact_dir,
     begin_run,
+    checkpoint_args,
+    checkpoint_dir,
     current_run,
     dataset_dir,
     history,
     model_dir,
     out_dir,
     param,
+    resume_from,
     run_id,
     run_record,
     trace,
@@ -66,7 +80,7 @@ from .notebook import (
 from .store import VerificationResult
 from .units import human_bytes, parse_size
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 _default: Cache | None = None
 _default_lock = threading.Lock()
@@ -134,6 +148,8 @@ __all__ = [
     "ArtifactStatus",
     "Cache",
     "CacheStatus",
+    "Checkpoint",
+    "CheckpointPolicy",
     "CollectResult",
     "Config",
     "InsufficientSpace",
@@ -153,6 +169,9 @@ __all__ = [
     "artifact_dir",
     "artifacts",
     "begin_run",
+    "checkpoint_args",
+    "checkpoint_dir",
+    "checkpoints",
     "current_run",
     "dataset_dir",
     "default_cache",
@@ -170,6 +189,7 @@ __all__ = [
     "publish",
     "release",
     "resolve",
+    "resume_from",
     "run_id",
     "run_record",
     "status",

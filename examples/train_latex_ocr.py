@@ -82,8 +82,6 @@ converted_dataset = [convert_to_conversation(sample) for sample in dataset]
 
 # -- train --------------------------------------------------------------------
 
-import tempfile  # noqa: E402
-
 from trl import SFTConfig, SFTTrainer  # noqa: E402
 from unsloth.trainer import UnslothVisionDataCollator  # noqa: E402
 
@@ -107,9 +105,11 @@ trainer = SFTTrainer(
         weight_decay=0.001,
         lr_scheduler_type="linear",
         seed=3407,
-        # Intermediate checkpoints are scratch, not artifacts — keep them out of
-        # the output directory so they are not published.
-        output_dir=tempfile.mkdtemp(prefix="trainer-"),
+        # Checkpoints are not artifacts, so they stay out of the output
+        # directory — but they are not scratch either. This writes them to a
+        # durable directory that survives a failed run, every 250 steps rather
+        # than once an epoch, keeping the newest three.
+        **nawat.checkpoint_args(save_steps=250, save_total_limit=3),
         report_to="none",
         remove_unused_columns=False,
         dataset_text_field="",
@@ -118,7 +118,9 @@ trainer = SFTTrainer(
     ),
 )
 
-trainer.train()
+# None on a first run, the newest checkpoint on a resubmission — so `nawat
+# resume <id>` picks this run up where it stopped instead of at step 0.
+trainer.train(resume_from_checkpoint=nawat.resume_from())
 
 # -- save ---------------------------------------------------------------------
 #

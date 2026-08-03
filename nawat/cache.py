@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Sequence
 
+from . import checkpoints
 from .config import Config
 from .db import Database
 from .errors import InsufficientSpace, NotFound, Protected, StoreUnavailable, VerificationFailed
@@ -90,6 +91,10 @@ class CacheStatus:
     unreplicated_bytes: int
     disk_free: int
     disk_total: int
+    #: Disk held by trainer checkpoints. Outside the ceiling and outside
+    #: eviction — nothing here reclaims it — so it is reported instead, because
+    #: disk the cache will never free still has to be accounted for somewhere.
+    checkpoint_bytes: int = 0
 
     @property
     def headroom(self) -> int:
@@ -234,6 +239,7 @@ class Cache:
             unreplicated_bytes=sum(a.bytes for a in artifacts if not a.replicated),
             disk_free=usage.free,
             disk_total=usage.total,
+            checkpoint_bytes=checkpoints.usage_bytes(self.config.checkpoint_root),
         )
 
     def is_present(self, key: "str | Key") -> bool:
@@ -315,6 +321,10 @@ class Cache:
         self._sweep_staging()
 
     def _walk_markers(self, root: Path) -> Iterator[Path]:
+        # Checkpoints are not artifacts and hold no marker, so the walk skips
+        # that subtree rather than scanning thousands of shard files for one it
+        # will never find.
+        skip = {self.config.staging_root, self.config.checkpoint_root}
         stack: list[tuple[Path, int]] = [(root, 0)]
         while stack:
             directory, depth = stack.pop()
@@ -329,8 +339,11 @@ class Cache:
             except OSError:
                 continue
             for entry in entries:
-                if entry.is_dir(follow_symlinks=False) and not entry.name.startswith(".nawat"):
-                    stack.append((Path(entry.path), depth + 1))
+                if not entry.is_dir(follow_symlinks=False) or entry.name.startswith(".nawat"):
+                    continue
+                path = Path(entry.path)
+                if path not in skip:
+                    stack.append((path, depth + 1))
 
     def _sweep_staging(self) -> None:
         staging = self.config.staging_root
@@ -547,12 +560,19 @@ class Cache:
             status = self.get(key)
             size = human_bytes(status.bytes) if status else "?"
             held.append(f"{key} ({size}) — {reason}")
+        kept = checkpoints.usage_bytes(self.config.checkpoint_root)
+        if kept:
+            held.append(f"checkpoints ({human_bytes(kept)}) — kept so failed runs can be resumed")
         leading = result.skipped[0] if result.skipped else None
         if leading is not None:
             key, reason = leading
             status = self.get(key)
             size = human_bytes(status.bytes) if status else "unknown size"
             remedy = f"{key} ({size}) is {reason} — release it, or raise the ceiling in Settings."
+        elif kept >= short:
+            # Nothing cached can go, but the checkpoints can — and the user is
+            # the only one who can say a half-trained model is expendable.
+            remedy = f"Checkpoints hold {human_bytes(kept)}. Free them with: nawat checkpoints --prune"
         else:
             remedy = "Nothing on disk can be freed — raise the ceiling in Settings."
         raise InsufficientSpace(
