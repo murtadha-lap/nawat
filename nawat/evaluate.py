@@ -346,6 +346,6 @@ class Evaluator:
             for path in sources:
                 shutil.copy2(path, Path(scratch) / path.name)
             try:
-                self.cache.store.publish(Path(scratch), Key.parse(f"runs/{record.id}/record"))
+                self.cache.store.publish(Path(scratch), Key.parse(f"runs/{record.publish_prefix}/record"))
             except NawatError:
                 pass  # the local record is intact; replication retries next publish

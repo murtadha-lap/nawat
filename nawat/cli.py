@@ -14,19 +14,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import select
 import shlex
 import subprocess
 import sys
 import threading
 import time
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
+from . import checkpoints
 from .cache import Cache, open_cache
+from .checkpoints import CheckpointPolicy
 from .config import UNSET, Config
 from .errors import NawatError
 from .keys import KINDS, Key
-from .runs import RunSpec, RunState, RunStore
+from .runs import RunSpec, RunState, RunStore, validate_run_name
 from .units import bar, human_age, human_bytes, parse_size
 
 PROGRAM = "nawat"
@@ -96,6 +100,8 @@ def cmd_status(cache: Cache, args) -> int:
         f" · {human_bytes(status.unreplicated_bytes)} not yet in object storage"
     )
     print(f"artifacts  {status.artifacts}")
+    if status.checkpoint_bytes:
+        print(f"ckpts      {human_bytes(status.checkpoint_bytes)} kept for resuming — {PROGRAM} checkpoints")
     if status.headroom < 0:
         _err(f"\nOver the ceiling by {human_bytes(-status.headroom)}. Run: {PROGRAM} free")
     if status.unreplicated_bytes:
@@ -348,10 +354,45 @@ def _run_store(cache: Cache) -> RunStore:
     return RunStore(cache.db, cache.config.state_dir / "runs")
 
 
-def _executor(cache: Cache):
+def _executor(cache: Cache, ask_name=None):
     from .executor import Executor
 
-    return Executor(cache, _run_store(cache))
+    return Executor(cache, _run_store(cache), ask_name=ask_name)
+
+
+#: How long the end-of-run name prompt waits before publishing under the run id.
+#: A run that finishes at four in the morning must not sit there holding its
+#: artifacts hostage until someone comes back to the terminal.
+NAME_TIMEOUT = 300.0
+
+
+def _ask_name(record) -> str | None:
+    """Ask what to call the run, once it is over and before anything is uploaded.
+
+    Only on a terminal, and only for as long as someone is plausibly watching.
+    """
+    if not (sys.stdin.isatty() and sys.stderr.isatty()):
+        return None
+    outcome = "finished" if record.exit_code == 0 else f"exited {record.exit_code}"
+    _err(f"\nrun {record.id} {outcome}.")
+    _err("Name it for object storage — artifacts publish under runs/<name>/.")
+    # One deadline for the whole exchange, retries included: the artifacts of a
+    # finished run are not held up for longer than someone might be away from
+    # the terminal, however many times the name comes back unusable.
+    deadline = time.monotonic() + NAME_TIMEOUT
+    while True:
+        _err(f"name [{record.id}]: ")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not select.select([sys.stdin], [], [], remaining)[0]:
+            _err(f"\nNo answer in {human_age(NAME_TIMEOUT)}; publishing under runs/{record.id}/.")
+            return None
+        answer = sys.stdin.readline().strip()
+        if not answer:
+            return None
+        try:
+            return validate_run_name(answer)
+        except NawatError as exc:
+            _err(f"{exc.cause} {exc.remedy or ''}".strip())
 
 
 def _parse_params(pairs: list[str]) -> dict[str, str]:
@@ -365,7 +406,7 @@ def _parse_params(pairs: list[str]) -> dict[str, str]:
 
 
 def cmd_submit(cache: Cache, args) -> int:
-    executor = _executor(cache)
+    executor = _executor(cache, ask_name=None if args.name or args.no_name else _ask_name)
     spec = RunSpec(
         script=args.script,
         model=Key.parse(args.model) if args.model else None,
@@ -373,15 +414,58 @@ def cmd_submit(cache: Cache, args) -> int:
         inputs=tuple(Key.parse(k) for k in args.input),
         params=_parse_params(args.param),
         notes=args.notes or "",
+        checkpoints=CheckpointPolicy(
+            lineage=args.checkpoint_lineage or "",
+            resume=not args.fresh,
+            keep=args.keep_checkpoints,
+            publish=not args.no_publish_checkpoints,
+        ),
     )
     executor.validate(spec)
-    record = executor.runs.create(spec, args.run_id)
+    record = executor.runs.create(spec, args.run_id, name=args.name)
+    return _launch(executor, record, queue=args.queue)
 
-    if args.queue:
+
+def cmd_resume(cache: Cache, args) -> int:
+    """Submit the same run again, so it continues from its last checkpoint."""
+    executor = _executor(cache, ask_name=None if args.name else _ask_name)
+    previous = executor.runs.get(args.run_id)
+    lineage = previous.spec.checkpoint_lineage
+    directory = checkpoints.lineage_dir(cache.config, lineage)
+    newest = checkpoints.latest(directory)
+
+    if newest is None:
+        _err(f"Lineage {lineage} holds no checkpoint, so there is nothing to continue from.")
+        _err(f"Inspect it with: {PROGRAM} checkpoints {lineage}")
+        if not args.force:
+            return 3
+        _err("Continuing anyway (--force); this starts from step 0.")
+    else:
+        _err(f"run {previous.id} reached {newest.describe()}")
+
+    # The lineage is pinned rather than re-derived, so the new run continues
+    # this one even if it was submitted with an explicit lineage of its own.
+    spec = replace(
+        previous.spec,
+        params={**previous.spec.params, **_parse_params(args.param)},
+        notes=args.notes if args.notes is not None else f"resumes {previous.id}",
+        checkpoints=replace(previous.spec.checkpoints, lineage=lineage, resume=True),
+    )
+    executor.validate(spec)
+    # The name carries over by default: a resumed run is the same experiment,
+    # so its artifacts belong in the folder the first attempt was filed under.
+    record = executor.runs.create(spec, args.run_id_new, name=args.name or previous.name)
+    _err(f"resuming as run {record.id}")
+    return _launch(executor, record, queue=args.queue)
+
+
+def _launch(executor, record, *, queue: bool) -> int:
+    """Run it here and stream the log, or hand it to the control plane."""
+    if queue:
         print(f"Queued run {record.id}. It starts when the control plane reaches it.")
         return 0
 
-    _err(f"run {record.id}  {spec.script}")
+    _err(f"run {record.id}  {record.spec.script}")
     finished: list = []
     worker = threading.Thread(target=lambda: finished.append(executor.execute(record.id)), daemon=True)
     worker.start()
@@ -391,11 +475,16 @@ def cmd_submit(cache: Cache, args) -> int:
     worker.join()
 
     final = executor.runs.get(record.id)
-    print(f"\nrun {final.id} {final.state.value} in {human_age(final.duration or 0)}")
+    named = f" ({final.name})" if final.name else ""
+    print(f"\nrun {final.id}{named} {final.state.value} in {human_age(final.duration or 0)}")
     for key in final.artifacts:
         print(f"  published  {key}")
+    if final.checkpoint:
+        print(f"  checkpoint {final.checkpoint}")
     if final.error:
         _err(final.error)
+    if final.state is not RunState.SUCCEEDED and final.checkpoint:
+        _err(f"Nothing is lost up to that checkpoint. Continue from it with: {PROGRAM} resume {final.id}")
     return 0 if final.state is RunState.SUCCEEDED else 1
 
 
@@ -413,16 +502,16 @@ def cmd_runs(cache: Cache, args) -> int:
     rows = [
         [
             r.id,
+            r.name or "",
             r.state.value,
             r.spec.script,
-            str(r.spec.model or ""),
             human_age(now - r.submitted_at),
             human_age(r.duration) if r.duration else "",
             str(len(r.artifacts)),
         ]
         for r in records
     ]
-    _table(["run", "state", "script", "model", "age", "took", "artifacts"], rows, right={4, 5, 6})
+    _table(["run", "name", "state", "script", "age", "took", "artifacts"], rows, right={4, 5, 6})
     return 0
 
 
@@ -432,6 +521,8 @@ def cmd_run(cache: Cache, args) -> int:
         print(json.dumps(record.to_json(), indent=2))
         return 0
     print(f"run        {record.id}")
+    if record.name:
+        print(f"name       {record.name}")
     print(f"state      {record.state.value}" + (f" (exit {record.exit_code})" if record.exit_code is not None else ""))
     print(f"script     {record.spec.script}")
     if record.spec.model:
@@ -444,8 +535,95 @@ def cmd_run(cache: Cache, args) -> int:
         print(f"took       {human_age(record.duration)}")
     for key in record.artifacts:
         print(f"artifact   {key}")
+    print(f"lineage    {record.spec.checkpoint_lineage}")
+    if record.checkpoint:
+        print(f"checkpoint {record.checkpoint}")
     if record.error:
         print(f"error      {record.error}")
+    if record.checkpoint and record.state is not RunState.SUCCEEDED:
+        print(f"\nContinue from that checkpoint with: {PROGRAM} resume {record.id}")
+    return 0
+
+
+def cmd_checkpoints(cache: Cache, args) -> int:
+    """What can be resumed, and what it costs in disk."""
+    root = cache.config.checkpoint_root
+    runs = _run_store(cache)
+    busy = {r.spec.checkpoint_lineage: r.id for r in runs.active()}
+    found = checkpoints.lineages(root)
+    if args.lineage:
+        found = [l for l in found if l.name == args.lineage]
+        if not found:
+            _err(f"No checkpoint lineage {args.lineage} under {root}.")
+            return 3
+
+    if args.rm or args.prune:
+        return _remove_checkpoints(found, busy, keep=args.keep, remove_all=args.rm, named=bool(args.lineage))
+
+    if args.json:
+        print(json.dumps([l.to_json() for l in found], indent=2))
+        return 0
+    if not found:
+        print(f"No checkpoints under {root}.")
+        print("They appear once a run writes one; a failed run's are kept so it can be resumed.")
+        return 0
+
+    if args.lineage:
+        lineage = found[0]
+        print(f"lineage    {lineage.name}")
+        print(f"path       {lineage.path}")
+        if lineage.run_id:
+            print(f"last run   {lineage.run_id}")
+        for checkpoint in lineage.checkpoints:
+            print(f"  {checkpoint.describe()}")
+        if lineage.latest:
+            print(f"\nA run of this lineage continues from {lineage.latest.name}.")
+        return 0
+
+    now = time.time()
+    rows = [
+        [
+            l.name,
+            str(l.latest.step) if l.latest else "-",
+            str(len(l.checkpoints)),
+            human_bytes(l.bytes),
+            human_age(now - (l.updated_at or now)),
+            l.run_id or "",
+        ]
+        for l in found
+    ]
+    _table(["lineage", "step", "saved", "size", "age", "last run"], rows, right={1, 2, 3, 4})
+    total = sum(l.bytes for l in found)
+    print(f"\n{human_bytes(total)} kept so failed runs can be resumed. Free it with: {PROGRAM} checkpoints --prune")
+    return 0
+
+
+def _remove_checkpoints(found, busy: dict[str, str], *, keep: int, remove_all: bool, named: bool) -> int:
+    """Delete checkpoints, refusing any lineage a live run is still writing to.
+
+    Pruning always leaves one resumable checkpoint behind; removing a lineage
+    outright leaves nothing, so it has to be named.
+    """
+    freed = 0
+    for lineage in found:
+        if lineage.name in busy:
+            _err(f"  kept     {lineage.name} — run {busy[lineage.name]} is still writing to it")
+            continue
+        if remove_all:
+            if not named:
+                _err(f"  kept     {lineage.name} — name a lineage to remove it outright")
+                continue
+            freed += checkpoints.discard(lineage.path)
+            print(f"  removed  {lineage.name}")
+            continue
+        removed = checkpoints.prune(lineage.path, keep=max(1, keep))
+        freed += sum(c.bytes for c in removed)
+        survivor = checkpoints.latest(lineage.path)
+        print(
+            f"  pruned   {lineage.name} — removed {len(removed)},"
+            f" kept {survivor.name if survivor else 'nothing'}"
+        )
+    print(f"Freed {human_bytes(freed)}.")
     return 0
 
 
@@ -832,9 +1010,38 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", action="append", default=[], metavar="KEY")
     p.add_argument("--param", action="append", default=[], metavar="NAME=VALUE")
     p.add_argument("--notes", help="why this run exists")
+    p.add_argument("--name", metavar="NAME",
+                   help="what to call this run in object storage; asked for at the end if omitted")
+    p.add_argument("--no-name", action="store_true", help="do not ask for a name; publish under the run id")
     p.add_argument("--run-id", help="identify this run; generated if omitted")
     p.add_argument("--queue", action="store_true", help="enqueue for the control plane instead of running here")
+    p.add_argument("--checkpoint-lineage", metavar="NAME",
+                   help="checkpoint directory to train into; derived from the script and inputs if omitted")
+    p.add_argument("--fresh", action="store_true",
+                   help="ignore and delete this lineage's checkpoints, starting from step 0")
+    p.add_argument("--keep-checkpoints", action="store_true",
+                   help="keep the checkpoints on local disk even after the run succeeds")
+    p.add_argument("--no-publish-checkpoints", action="store_true",
+                   help="do not replicate the last checkpoint to object storage")
     p.set_defaults(run=cmd_submit)
+
+    p = sub.add_parser("resume", help="run a failed run again, continuing from its last checkpoint")
+    p.add_argument("run_id", help="the run to continue")
+    p.add_argument("--param", action="append", default=[], metavar="NAME=VALUE", help="change a parameter")
+    p.add_argument("--notes")
+    p.add_argument("--name", metavar="NAME", help="publish under this name; the previous run's by default")
+    p.add_argument("--run-id", dest="run_id_new", help="identify the new run; generated if omitted")
+    p.add_argument("--queue", action="store_true", help="enqueue for the control plane instead of running here")
+    p.add_argument("--force", action="store_true", help="submit even if there is no checkpoint to continue from")
+    p.set_defaults(run=cmd_resume)
+
+    p = sub.add_parser("checkpoints", help="what can be resumed, and what it costs in disk")
+    p.add_argument("lineage", nargs="?", help="one lineage, in detail")
+    p.add_argument("--prune", action="store_true", help="keep only the newest checkpoints of each lineage")
+    p.add_argument("--keep", type=int, default=1, metavar="N", help="how many to keep when pruning (default 1)")
+    p.add_argument("--rm", action="store_true", help="remove the named lineage outright")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_checkpoints)
 
     p = sub.add_parser("runs", help="run history")
     p.add_argument("--state", choices=[s.value for s in RunState])

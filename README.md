@@ -111,6 +111,8 @@ models + datasets → bounded cache → Unsloth training → verified adapter �
 | Prevent a full disk | Enforces a cache ceiling and safe LRU reclamation |
 | Protect active work | Leases inputs so live training and inference cannot lose files |
 | Preserve an experiment | Records the script, inputs, parameters, logs, metrics, and outputs |
+| Survive a failed run | Keeps its checkpoints and resumes the next run from them |
+| Find it again later | Asks what to call the run; the name is its folder in the bucket |
 | Save an adapter | Uploads and verifies it before reclaiming the local copy |
 | Compare configurations | Stores structured parameters with every run |
 | Test a LoRA | Starts one vLLM base and hot-loads compatible adapters |
@@ -708,11 +710,11 @@ trainer = SFTTrainer(
     args=SFTConfig(
         max_steps=run.param("max_steps", 30),
         learning_rate=run.param("learning_rate", 2e-4),
-        output_dir=str(run.scratch_dir("trainer")),
+        **nawat.checkpoint_args(save_steps=250),
         # Add the remaining SFTConfig options for your model here.
     ),
 )
-trainer.train()
+trainer.train(resume_from_checkpoint=run.resume_from)
 
 model.save_pretrained(run.artifact_dir("adapter"))
 tokenizer.save_pretrained(run.artifact_dir("adapter"))
@@ -720,10 +722,16 @@ run.finish()
 ```
 
 - `run.model_dir` and `run.dataset_dir` are ordinary local paths.
-- `run.scratch_dir()` is temporary and is not published.
+- `run.checkpoint_dir` is durable and survives a failed run; re-running the cell
+  continues from the last saved step. `nawat.checkpoint_args()` points the
+  trainer at it and saves every 250 steps instead of once an epoch.
+- `run.scratch_dir()` is temporary, is not published, and is deleted when the
+  run ends — for working files, never for checkpoints.
 - `run.artifact_dir("adapter")` becomes `runs/<id>/adapter`.
 - `run.callback()` streams Trainer metrics.
 - `run.finish()` uploads, verifies, reclaims local output, and closes the record.
+  `run.finish(name="arabic-ocr/2-epochs")` files it under that folder in object
+  storage instead of under the run id.
 
 For automatic exception recording:
 
@@ -731,6 +739,110 @@ For automatic exception recording:
 with nawat.begin_run(model="models/org/model", dataset="datasets/org/data") as run:
     ...
 ```
+
+## Surviving a failed run
+
+A long run fails for reasons that have nothing to do with the model: one corrupt
+image in the eleven-thousandth batch, an OOM, a reboot. Nawāt keeps the
+checkpoints of every run that does not succeed, so the cost of that is the
+minutes since the last save rather than the whole run.
+
+Two lines in the training script are all it needs:
+
+```python
+args = SFTConfig(
+    **nawat.checkpoint_args(save_steps=250, save_total_limit=3),
+    ...,
+)
+trainer.train(resume_from_checkpoint=nawat.resume_from())
+```
+
+`checkpoint_args()` sets `output_dir` to a durable directory, and saves every
+250 *steps* rather than once an epoch — an epoch over a large corpus can be a
+day wide, and a crash lands between two of them. `resume_from()` returns the
+newest checkpoint, or `None` for a fresh start, which is exactly what the
+Trainer expects in both cases. Both work under `nawat submit`, in a notebook,
+and under plain `python train.py`.
+
+Then resubmitting is resuming:
+
+```bash
+nawat submit train.py --model models/org/model --dataset datasets/org/data
+# ... fails at step 9522 after 60 hours
+
+nawat resume 2026-08-01-8075        # continues from checkpoint-9522
+```
+
+Checkpoints are grouped into a **lineage** named for the script and its inputs,
+so any submission of the same command continues the same training, and a
+different experiment cannot resume into it by accident. `nawat run <id>` shows
+which lineage a run used and which checkpoint it reached.
+
+```bash
+nawat checkpoints                   # what can be resumed, and what it costs
+nawat checkpoints <lineage>         # every saved step in one lineage
+nawat checkpoints --prune --keep 1  # free all but the newest of each
+nawat checkpoints <lineage> --rm    # remove one outright
+```
+
+| Situation | What happens to the checkpoints |
+| --- | --- |
+| The run succeeds | Replicated to object storage, then removed from local disk |
+| The script fails | Replicated **and** kept locally, recorded, resumed by the next submission |
+| The run is cancelled | Kept |
+| The machine reboots mid-run | Kept, and attached to the record when the platform restarts |
+| Publishing itself fails | Kept |
+
+Every ending replicates, because the disk holding a half-trained model is the one
+thing here with no second copy. The local copy is what a resume reads, so
+continuing a failed run never pulls gigabytes back down.
+
+Submit-time flags change that policy: `--keep-checkpoints` keeps them on local
+disk after success, `--fresh` deletes the lineage and starts at step 0,
+`--no-publish-checkpoints` skips the upload when it costs more than the insurance
+is worth, and `--checkpoint-lineage NAME` shares or isolates a lineage
+explicitly.
+
+Checkpoints live in `<cache root>/checkpoints`, outside the cache ceiling and
+outside eviction: nothing reclaims a half-trained model to make room, because it
+is the one thing here that cannot be downloaded again. That makes them yours to
+manage — `nawat status` reports what they hold, and `nawat checkpoints --prune`
+gives it back. Set `NAWAT_CHECKPOINT_ROOT` to put them on another filesystem.
+
+## Naming a run
+
+A bucket full of `2026-08-01-8075` tells you nothing a year later. When a run
+ends, Nawāt asks what to call it, and the answer is the folder its artifacts
+occupy in object storage:
+
+```text
+run 2026-08-03-f3d4 exited 1.
+Name it for object storage — artifacts publish under runs/<name>/.
+name [2026-08-03-f3d4]: arabic-ocr/2-epochs
+```
+
+```text
+ai-model/runs/arabic-ocr/2-epochs/adapter/
+ai-model/runs/arabic-ocr/2-epochs/checkpoint/
+ai-model/runs/arabic-ocr/2-epochs/reports/
+ai-model/runs/arabic-ocr/2-epochs/record/
+```
+
+The question comes at the end rather than the start because that is when you
+know what the run turned out to be. Nothing waits on you indefinitely: press
+enter, let it time out, or pass `--no-name`, and it publishes under the run id
+instead. `--name NAME` at submit skips the question entirely, which is what a
+queued or scripted run does. A name may contain `/`, so related runs file
+themselves together under one prefix.
+
+`nawat resume` carries the name across — a resumed run is the same experiment,
+so its artifacts belong in the same folder.
+
+**Whatever the outcome, the artifacts go to object storage.** A run that fails
+still publishes what it wrote — the partial reports, an emergency adapter, its
+last checkpoint — because that is everything it has to show for the GPU time,
+and a local disk is not where it should be left. The run record marks it failed,
+so a half-trained adapter is never mistaken for a finished one.
 
 ## Inference with Nawāt and vLLM
 
@@ -1095,14 +1207,18 @@ Commands are grouped here by task so the list is easier to scan:
 | Setup | `config`, `check` | Show effective configuration and verify storage end to end |
 | Find artifacts | `status`, `ls`, `registry`, `path` | Inspect disk usage and local or remote artifacts |
 | Move artifacts | `resolve`, `add`, `publish`, `verify` | Stage, adopt, upload, or verify model and dataset directories |
-| Protect space | `keep`, `release`, `leases`, `free`, `rm` | Protect live data and safely reclaim local storage |
-| Execute work | `hold`, `submit`, `scripts` | Stage inputs and run commands, scripts, or notebooks |
+| Protect space | `keep`, `release`, `leases`, `free`, `rm`, `checkpoints` | Protect live data and safely reclaim local storage |
+| Execute work | `hold`, `submit`, `resume`, `scripts` | Stage inputs and run commands, scripts, or notebooks |
 | Inspect runs | `runs`, `run`, `logs`, `metrics`, `cancel` | Monitor history, output, metrics, or stop a run |
 | Inference and evaluation | `serve`, `session`, `adapter`, `eval` | Serve a base, hot-load LoRA, and score a run |
 | Utilities | `estimate`, `shard`, `lab`, `api` | Estimate VRAM, shard data, open JupyterLab, or run the API |
 
 `pin`, `unpin`, and `collect` remain available as aliases for `keep`, `release`,
 and `free` respectively.
+
+Two of those are new. `nawat resume ID` runs a failed run again from its last
+checkpoint, and `nawat checkpoints` lists what can be resumed — with `--prune`
+to give the disk back and `--rm` to drop a lineage outright.
 
 ## Safety model
 
@@ -1114,8 +1230,13 @@ Local files are reclaimed only when:
    moment of deletion.
 
 Run records, logs, and metrics are durable provenance rather than disposable
-cache. Failed runs retain their diagnostics but do not publish incomplete model
-artifacts.
+cache. A failed run publishes what it produced rather than discarding it — the
+record carries the failure, so a partial artifact is never mistaken for a
+finished one.
+
+Checkpoints are exempt from reclamation entirely. They are the only state on the
+host that cannot be fetched again, so nothing evicts them to make room; they are
+removed when a run succeeds, or when you ask.
 
 ## Development
 

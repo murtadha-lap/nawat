@@ -18,6 +18,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
 
+from . import checkpoints as checkpoint_store
+from .checkpoints import CheckpointPolicy
 from .db import Database
 from .errors import InvalidKey, NotFound
 from .keys import Key
@@ -36,10 +38,18 @@ CREATE TABLE IF NOT EXISTS runs (
     pid          INTEGER,
     error        TEXT,
     artifacts    TEXT NOT NULL DEFAULT '[]',
-    description  TEXT
+    description  TEXT,
+    checkpoint   TEXT,
+    name         TEXT
 );
 CREATE INDEX IF NOT EXISTS runs_state ON runs (state, submitted_at);
 """
+
+#: Columns added after the first release, applied to databases that predate them.
+MIGRATIONS = (
+    ("checkpoint", "ALTER TABLE runs ADD COLUMN checkpoint TEXT"),
+    ("name", "ALTER TABLE runs ADD COLUMN name TEXT"),
+)
 
 
 class RunState(str, Enum):
@@ -73,6 +83,20 @@ def validate_run_id(run_id: str) -> str:
     return run_id
 
 
+def validate_run_name(name: str) -> str:
+    """A run's name is the folder its artifacts occupy in object storage.
+
+    So it has to be a usable key rather than free text — and it may contain a
+    ``/``, which is how related runs end up filed together under one prefix:
+    ``arabic-ocr/2-epochs`` publishes as ``runs/arabic-ocr/2-epochs/adapter``.
+    """
+    cleaned = name.strip().strip("/")
+    if not cleaned:
+        raise InvalidKey("A run name cannot be empty.", "Give it a short name, or leave it unset to use the run id.")
+    Key.parse(f"runs/{cleaned}")  # raises with the segment rule if it is unusable
+    return cleaned
+
+
 @dataclass(frozen=True)
 class RunSpec:
     """What was submitted. Enough to reproduce the run on its own (G4)."""
@@ -83,6 +107,7 @@ class RunSpec:
     inputs: tuple[Key, ...] = ()
     params: Mapping[str, str] = field(default_factory=dict)
     notes: str = ""
+    checkpoints: CheckpointPolicy = field(default_factory=CheckpointPolicy)
 
     def staged_keys(self) -> tuple[Key, ...]:
         """Every input to stage, in a stable order, without duplicates."""
@@ -96,6 +121,19 @@ class RunSpec:
     def is_notebook(self) -> bool:
         return self.script.endswith(".ipynb")
 
+    @property
+    def checkpoint_lineage(self) -> str:
+        """Which checkpoint directory this run trains into.
+
+        Derived from the script and its inputs unless it was named explicitly,
+        so that two submissions of the same command share one lineage — that is
+        what makes a resubmission resume rather than restart — while a different
+        experiment gets a directory of its own.
+        """
+        if self.checkpoints.lineage:
+            return checkpoint_store.validate(self.checkpoints.lineage)
+        return checkpoint_store.lineage_name(self.script, (str(k) for k in self.staged_keys()))
+
     def to_json(self) -> dict[str, Any]:
         return {
             "script": self.script,
@@ -104,6 +142,8 @@ class RunSpec:
             "inputs": [str(k) for k in self.inputs],
             "params": dict(self.params),
             "notes": self.notes,
+            "checkpoints": self.checkpoints.to_json(),
+            "checkpoint_lineage": self.checkpoint_lineage,
         }
 
     @classmethod
@@ -115,6 +155,7 @@ class RunSpec:
             inputs=tuple(Key.parse(k) for k in data.get("inputs") or ()),
             params=dict(data.get("params") or {}),
             notes=data.get("notes", ""),
+            checkpoints=CheckpointPolicy.from_json(data.get("checkpoints")),
         )
 
 
@@ -131,6 +172,23 @@ class RunRecord:
     error: str | None = None
     artifacts: tuple[Key, ...] = ()
     description: str | None = None
+    #: The newest checkpoint left on disk when the run ended, if any. Set on
+    #: failure as well as success — especially on failure, since that is when
+    #: it is the only thing standing between a crash and days of lost GPU time.
+    checkpoint: str | None = None
+    #: What this run is called. Chosen by the researcher rather than generated,
+    #: and used as the run's folder in object storage, so a bucket reads as a
+    #: list of experiments instead of a list of timestamps.
+    name: str | None = None
+
+    @property
+    def publish_prefix(self) -> str:
+        """The key prefix this run's artifacts are published under.
+
+        The name when there is one, the id otherwise — so a run always has a
+        home in object storage, named or not.
+        """
+        return self.name or self.id
 
     @property
     def duration(self) -> float | None:
@@ -141,11 +199,12 @@ class RunRecord:
     @property
     def run_key(self) -> Key:
         """Where this run's own artifacts live."""
-        return Key.parse(f"runs/{self.id}")
+        return Key.parse(f"runs/{self.publish_prefix}")
 
     def to_json(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "name": self.name,
             "state": self.state.value,
             "spec": self.spec.to_json(),
             "submitted_at": self.submitted_at,
@@ -157,6 +216,7 @@ class RunRecord:
             "error": self.error,
             "artifacts": [str(k) for k in self.artifacts],
             "description": self.description,
+            "checkpoint": self.checkpoint,
         }
 
     @classmethod
@@ -173,6 +233,8 @@ class RunRecord:
             error=data.get("error"),
             artifacts=tuple(Key.parse(k) for k in data.get("artifacts") or ()),
             description=data.get("description"),
+            checkpoint=data.get("checkpoint"),
+            name=data.get("name"),
         )
 
 
@@ -183,7 +245,16 @@ class RunStore:
         self.db = db
         self.root = root
         self.root.mkdir(parents=True, exist_ok=True)
-        self.db.connect().executescript(SCHEMA)
+        conn = self.db.connect()
+        conn.executescript(SCHEMA)
+        self._migrate(conn)
+
+    def _migrate(self, conn) -> None:
+        """Add columns a database written by an older version does not have."""
+        present = {row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
+        for column, statement in MIGRATIONS:
+            if column not in present:
+                conn.execute(statement)
 
     # -- layout ------------------------------------------------------------
 
@@ -207,15 +278,21 @@ class RunStore:
 
     # -- writing -----------------------------------------------------------
 
-    def create(self, spec: RunSpec, run_id: str | None = None) -> RunRecord:
+    def create(self, spec: RunSpec, run_id: str | None = None, name: str | None = None) -> RunRecord:
         run_id = validate_run_id(run_id) if run_id else new_run_id()
         if self.find(run_id) is not None:
             raise InvalidKey(f"Run {run_id} already exists.", "Choose another id, or omit it to have one generated.")
-        record = RunRecord(id=run_id, spec=spec, state=RunState.QUEUED, submitted_at=time.time())
+        record = RunRecord(
+            id=run_id,
+            spec=spec,
+            state=RunState.QUEUED,
+            submitted_at=time.time(),
+            name=validate_run_name(name) if name else None,
+        )
         with self.db.tx() as conn:
             conn.execute(
-                "INSERT INTO runs (id, state, spec, submitted_at, artifacts) VALUES (?, ?, ?, ?, '[]')",
-                (record.id, record.state.value, json.dumps(spec.to_json()), record.submitted_at),
+                "INSERT INTO runs (id, state, spec, submitted_at, artifacts, name) VALUES (?, ?, ?, ?, '[]', ?)",
+                (record.id, record.state.value, json.dumps(spec.to_json()), record.submitted_at, record.name),
             )
         self._write_record_file(record)
         return record
@@ -227,11 +304,14 @@ class RunStore:
             changes["artifacts"] = tuple(Key.parse(k) for k in changes["artifacts"])
         if "state" in changes:
             changes["state"] = RunState(changes["state"])
+        if changes.get("name"):
+            changes["name"] = validate_run_name(changes["name"])
         updated = replace(record, **changes)
         with self.db.tx() as conn:
             conn.execute(
                 "UPDATE runs SET state = ?, started_at = ?, finished_at = ?, exit_code = ?,"
-                " pid = ?, error = ?, artifacts = ?, description = ? WHERE id = ?",
+                " pid = ?, error = ?, artifacts = ?, description = ?, checkpoint = ?, name = ?"
+                " WHERE id = ?",
                 (
                     updated.state.value,
                     updated.started_at,
@@ -241,6 +321,8 @@ class RunStore:
                     updated.error,
                     json.dumps([str(k) for k in updated.artifacts]),
                     updated.description,
+                    updated.checkpoint,
+                    updated.name,
                     updated.id,
                 ),
             )
@@ -303,6 +385,8 @@ class RunStore:
             error=row["error"],
             artifacts=tuple(Key.parse(k) for k in json.loads(row["artifacts"])),
             description=row["description"],
+            checkpoint=row["checkpoint"],
+            name=row["name"],
         )
 
     # -- logs --------------------------------------------------------------
@@ -345,22 +429,34 @@ class RunStore:
                 return
             time.sleep(poll)
 
-    def reconcile(self, is_alive) -> list[RunRecord]:
+    def reconcile(self, is_alive, checkpoint_root: Path | None = None) -> list[RunRecord]:
         """After a crash or reboot, no run is still running. Mark them failed.
 
         Takes a liveness predicate so the caller decides what "still running"
         means; a run whose process is genuinely alive is left alone.
+
+        Given the checkpoint root, each recovered run also picks up whatever
+        checkpoint it had reached. A run the platform lost track of is precisely
+        the one nobody watched fail, so it is the one most likely to be
+        discovered days later — with the record as the only clue that there is
+        something to resume from.
         """
         recovered = []
         for record in self.active():
             if record.pid is not None and is_alive(record.pid):
                 continue
+            newest = None
+            if checkpoint_root is not None:
+                newest = checkpoint_store.latest(
+                    checkpoint_store.lineage_path(checkpoint_root, record.spec.checkpoint_lineage)
+                )
             recovered.append(
                 self.update(
                     record.id,
                     state=RunState.FAILED,
                     finished_at=record.finished_at or time.time(),
                     error="The run did not survive a restart of the platform.",
+                    checkpoint=str(newest.path) if newest else record.checkpoint,
                 )
             )
         return recovered
@@ -379,8 +475,8 @@ def rebuild_from_disk(store: RunStore) -> int:
         with store.db.tx() as conn:
             conn.execute(
                 "INSERT INTO runs (id, state, spec, submitted_at, started_at, finished_at,"
-                " exit_code, pid, error, artifacts, description)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " exit_code, pid, error, artifacts, description, checkpoint, name)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     record.id,
                     record.state.value,
@@ -393,6 +489,8 @@ def rebuild_from_disk(store: RunStore) -> int:
                     record.error,
                     json.dumps([str(k) for k in record.artifacts]),
                     record.description,
+                    record.checkpoint,
+                    record.name,
                 ),
             )
         restored += 1
@@ -400,6 +498,7 @@ def rebuild_from_disk(store: RunStore) -> int:
 
 
 __all__ = [
+    "CheckpointPolicy",
     "RunRecord",
     "RunSpec",
     "RunState",
@@ -407,4 +506,5 @@ __all__ = [
     "new_run_id",
     "rebuild_from_disk",
     "validate_run_id",
+    "validate_run_name",
 ]

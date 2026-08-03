@@ -81,6 +81,13 @@ class Config:
     #: Filesystem headroom kept free beneath the ceiling, for scratch and checkpoints.
     min_free: int
 
+    #: Where trainer checkpoints are kept between runs. Derived from the cache
+    #: root when it is not given, and never None once constructed — see
+    #: :meth:`__post_init__`. It is deliberately *not* the staging root and not
+    #: an artifact location: a half-trained model is the one thing here that
+    #: cannot be fetched again, so nothing that reclaims disk may touch it.
+    checkpoint_root: Path | None = None
+
     store_backend: str = "s3"
     bucket: str = "nawat"
     store_prefix: str = ""
@@ -118,6 +125,10 @@ class Config:
     #: show which file is in force — misconfiguration is usually the wrong file.
     env_file: Path | None = None
 
+    def __post_init__(self) -> None:
+        if self.checkpoint_root is None:
+            object.__setattr__(self, "checkpoint_root", self.cache_root / "checkpoints")
+
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None, *, env_file=UNSET) -> "Config":
         env = os.environ if env is None else env
@@ -125,12 +136,14 @@ class Config:
         cache_root = Path(env.get("NAWAT_CACHE_ROOT", DEFAULT_CACHE_ROOT)).expanduser().resolve()
         state_dir = Path(env.get("NAWAT_STATE_DIR", str(cache_root / ".nawat"))).expanduser().resolve()
         local_store = env.get("NAWAT_LOCAL_STORE_ROOT")
+        checkpoints = env.get("NAWAT_CHECKPOINT_ROOT")
         return cls(
             cache_root=cache_root,
             workspace_root=Path(env.get("NAWAT_WORKSPACE", DEFAULT_WORKSPACE)).expanduser().resolve(),
             state_dir=state_dir,
             cache_ceiling=parse_size(env.get("NAWAT_CACHE_CEILING", DEFAULT_CEILING)),
             min_free=parse_size(env.get("NAWAT_MIN_FREE", DEFAULT_MIN_FREE)),
+            checkpoint_root=Path(checkpoints).expanduser().resolve() if checkpoints else None,
             store_backend=env.get("NAWAT_STORE_BACKEND", "s3").strip().lower(),
             bucket=env.get("NAWAT_S3_BUCKET", "nawat"),
             store_prefix=env.get("NAWAT_S3_PREFIX", "").strip("/"),
@@ -170,8 +183,9 @@ class Config:
         return self.cache_root / ".nawat-staging"
 
     def ensure_dirs(self) -> None:
-        for path in (self.cache_root, self.state_dir, self.staging_root):
-            path.mkdir(parents=True, exist_ok=True)
+        for path in (self.cache_root, self.state_dir, self.staging_root, self.checkpoint_root):
+            if path is not None:
+                path.mkdir(parents=True, exist_ok=True)
 
     def redacted(self) -> dict[str, object]:
         """The only representation safe to log, store in a run record, or return over HTTP."""
