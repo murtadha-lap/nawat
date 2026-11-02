@@ -471,6 +471,17 @@ class Cache:
             assert status is not None
             return status
 
+    def mark_unreplicated(self, key: "str | Key") -> None:
+        """Object storage no longer holds this artifact: its local copy is now the only one.
+
+        Called after a deliberate delete from the bucket, so the cache stops
+        treating the local copy as safe to evict.
+        """
+        key = Key.parse(key)
+        with self._locked():
+            with self.db.tx() as conn:
+                conn.execute("UPDATE artifacts SET replicated_at = NULL WHERE key = ?", (str(key),))
+
     # -- verification ------------------------------------------------------
 
     def verify(self, key: "str | Key") -> VerificationResult:

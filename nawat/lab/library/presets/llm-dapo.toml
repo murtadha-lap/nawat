@@ -1,0 +1,33 @@
+# DAPO = GRPO with decoupled clipping (clip-higher), token-level loss over the global batch,
+# and no KL term. TRL implements it as loss_type="dapo". mask_truncated_completions stays
+# false: Unsloth reports KL / NaN issues with it on (TRL's own DAPO recipe sets it true).
+[preset]
+backbone    = "grpo"
+description = "DAPO: clip-higher, token-level loss, no KL (Qwen3 GRPO notebook setup)"
+parent      = "llm-grpo"
+model       = "models/unsloth/Qwen3-4B-Base"
+datasets    = ["datasets/open-r1/DAPO-Math-17k-Processed", "datasets/unsloth/OpenMathReasoning-mini"]
+
+[blocks]
+model    = "llm-lora"
+dataset  = "grpo-prompts"
+template = "reasoning-tags"
+rewards  = ["format-exact", "format-approx", "answer-match", "number-match"]
+eval     = ["gsm8k"]
+export   = ["adapter"]
+
+[params.backbone]
+loss_type                  = "dapo"
+epsilon                    = 0.2
+epsilon_high               = 0.28
+beta                       = 0.0
+mask_truncated_completions = false
+prime_epochs               = 2.0
+
+[params.model]
+r          = 32
+lora_alpha = 64
+
+[params.dataset]
+subset = "en"
+prime  = true

@@ -1,0 +1,372 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2119" viewBox="0 0 1600 2119">
+<defs>
+  <radialGradient id="halo" cx="0.5" cy="0" r="0.9">
+    <stop offset="0" stop-color="#34d399" stop-opacity="0.10"/><stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0d2a22"/><stop offset="1" stop-color="#0b1c1a"/>
+  </linearGradient>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M1 1 L9 5 L1 9" fill="none" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<rect width="1600" height="2119" fill="#0a0e17"/>
+<ellipse cx="800.0" cy="0" rx="1120.0" ry="700" fill="url(#halo)"/>
+<g transform="translate(112,118)">
+<rect x="-32.0" y="-32.0" width="64" height="64" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
+<g transform="scale(1.5)"><circle r="6" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><ellipse rx="11" ry="4" transform="rotate(-30)" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="-8" r="1.8" fill="#34d399"/></g>
+</g>
+<text x="168.0" y="116.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="44" font-weight="700" fill="#f1f5f9" text-anchor="start">Nawāt Lab</text>
+<text x="168.0" y="146.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="400" fill="#94a3b8" text-anchor="start">Every training is an experiment — a fixed backbone, swappable blocks, every parameter visible, approved by you.</text>
+<rect x="1265.5" y="96" width="254.5" height="34" rx="17" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.4"/>
+<text x="1392.8" y="118.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#6ee7b7" text-anchor="middle">Plan · Approve · Run · Compare</text>
+<text x="80.0" y="205.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">THE IDEA</text>
+<rect x="80.0" y="227.0" width="300.0" height="176.0" rx="18" fill="#111723" stroke="#1e2633" />
+<g transform="translate(124.0,273)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-8" y="-2" width="16" height="12" rx="2" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-5 -2 v-4 a5 5 0 0 1 10 0 v4" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cy="4" r="1.3" fill="#fbbf24"/></g>
+</g>
+<text x="160.0" y="269.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="21" font-weight="700" fill="#f1f5f9" text-anchor="start">Backbone</text>
+<text x="160.0" y="290.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#fbbf24" text-anchor="start" letter-spacing="1">fixed</text>
+<text x="104.0" y="333.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">The training flow for one method,</text>
+<text x="104.0" y="355.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">copied from the Unsloth notebook.</text>
+<text x="104.0" y="377.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Nobody edits it.</text>
+<text x="420.0" y="329.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="300" fill="#64748b" text-anchor="middle">+</text>
+<rect x="460.0" y="227.0" width="300.0" height="176.0" rx="18" fill="#111723" stroke="#1e2633" />
+<g transform="translate(504.0,273)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#38bdf8" fill-opacity="0.12" stroke="#38bdf8" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-10" y="-10" width="9" height="9" rx="2" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="1" y="-10" width="9" height="9" rx="2" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="-10" y="1" width="9" height="9" rx="2" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="2" width="9" height="9" rx="2" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2"/></g>
+</g>
+<text x="540.0" y="269.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="21" font-weight="700" fill="#f1f5f9" text-anchor="start">Blocks</text>
+<text x="540.0" y="290.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#38bdf8" text-anchor="start" letter-spacing="1">swappable</text>
+<text x="484.0" y="333.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Model, dataset, template, rewards,</text>
+<text x="484.0" y="355.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">eval, export, runtime — any block</text>
+<text x="484.0" y="377.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">can replace another of its kind.</text>
+<text x="800.0" y="329.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="300" fill="#64748b" text-anchor="middle">+</text>
+<rect x="840.0" y="227.0" width="300.0" height="176.0" rx="18" fill="#111723" stroke="#1e2633" />
+<g transform="translate(884.0,273)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#a78bfa" fill-opacity="0.12" stroke="#a78bfa" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M-9 -6 h18 M-9 0 h18 M-9 6 h18" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-3" cy="-6" r="2.2" fill="#0a0e17" stroke="#a78bfa" stroke-width="2"/><circle cx="4" cy="0" r="2.2" fill="#0a0e17" stroke="#a78bfa" stroke-width="2"/><circle cx="-6" cy="6" r="2.2" fill="#0a0e17" stroke="#a78bfa" stroke-width="2"/></g>
+</g>
+<text x="920.0" y="269.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="21" font-weight="700" fill="#f1f5f9" text-anchor="start">Parameters</text>
+<text x="920.0" y="290.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#a78bfa" text-anchor="start" letter-spacing="1">all visible</text>
+<text x="864.0" y="333.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Every number declared, with its</text>
+<text x="864.0" y="355.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">default and meaning. Changed by</text>
+<text x="864.0" y="377.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">--set, never by editing code.</text>
+<text x="1180.0" y="329.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="300" fill="#64748b" text-anchor="middle">=</text>
+<rect x="1220.0" y="227.0" width="300.0" height="176.0" rx="18" fill="url(#core)" stroke="#34d399" stroke-opacity="0.6" stroke-width="1.5"/>
+<g transform="translate(1264.0,273)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M-10 -6 h7 l2 2 h11 v11 h-20 z" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="1300.0" y="269.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="21" font-weight="700" fill="#6ee7b7" text-anchor="start">Experiment</text>
+<text x="1300.0" y="290.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="1">one folder</text>
+<text x="1244.0" y="333.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Approved by you, then run.</text>
+<text x="1244.0" y="355.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Code, params, traces, evals and</text>
+<text x="1244.0" y="377.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">weights kept together in S3.</text>
+<text x="80.0" y="463.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">HOW AN EXPERIMENT IS ASSEMBLED</text>
+<text x="1520.0" y="463.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#64748b" text-anchor="end">Example: the llm-dapo preset. Highlighted blocks are chosen; dashed ones can take their place.</text>
+<rect x="80.0" y="485.0" width="1440.0" height="470.0" rx="20" fill="#111723" stroke="#1e2633" />
+<rect x="112" y="517" width="250" height="406" rx="16" fill="#fbbf24" fill-opacity="0.07" stroke="#fbbf24" stroke-opacity="0.5"/>
+<g transform="translate(150,557)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-8" y="-2" width="16" height="12" rx="2" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-5 -2 v-4 a5 5 0 0 1 10 0 v4" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cy="4" r="1.3" fill="#fbbf24"/></g>
+</g>
+<text x="184.0" y="553.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="700" fill="#f1f5f9" text-anchor="start">grpo backbone</text>
+<text x="184.0" y="573.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="12.5" font-weight="500" fill="#fbbf24" text-anchor="start">fixed · hash 67b900</text>
+<circle cx="142" cy="608" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="613.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">1</text>
+<text x="162.0" y="613.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">load model</text>
+<line x1="142" y1="618" x2="142" y2="637" stroke="#fbbf24" stroke-opacity="0.35"/>
+<circle cx="142" cy="647" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="652.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">2</text>
+<text x="162.0" y="652.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">add LoRA</text>
+<line x1="142" y1="657" x2="142" y2="676" stroke="#fbbf24" stroke-opacity="0.35"/>
+<circle cx="142" cy="686" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="691.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">3</text>
+<text x="162.0" y="691.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">load data</text>
+<line x1="142" y1="696" x2="142" y2="715" stroke="#fbbf24" stroke-opacity="0.35"/>
+<circle cx="142" cy="725" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="730.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">4</text>
+<text x="162.0" y="730.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">apply template</text>
+<line x1="142" y1="735" x2="142" y2="754" stroke="#fbbf24" stroke-opacity="0.35"/>
+<circle cx="142" cy="764" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="769.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">5</text>
+<text x="162.0" y="769.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">prime format (SFT)</text>
+<line x1="142" y1="774" x2="142" y2="793" stroke="#fbbf24" stroke-opacity="0.35"/>
+<circle cx="142" cy="803" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="808.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">6</text>
+<text x="162.0" y="808.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#f1f5f9" text-anchor="start">GRPOTrainer + rewards</text>
+<line x1="142" y1="813" x2="142" y2="832" stroke="#fbbf24" stroke-opacity="0.35"/>
+<circle cx="142" cy="842" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="847.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">7</text>
+<text x="162.0" y="847.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">evaluate</text>
+<line x1="142" y1="852" x2="142" y2="871" stroke="#fbbf24" stroke-opacity="0.35"/>
+<circle cx="142" cy="881" r="10" fill="#0a0e17" stroke="#fbbf24" stroke-opacity="0.7"/>
+<text x="142.0" y="886.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="700" fill="#fbbf24" text-anchor="middle">8</text>
+<text x="162.0" y="886.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">export</text>
+<line x1="362" y1="553.2857142857143" x2="410" y2="553.2857142857143" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 4"/>
+<circle cx="362" cy="553.2857142857143" r="4" fill="#38bdf8"/>
+<text x="418.0" y="558.3" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="700" fill="#f1f5f9" text-anchor="start">model</text>
+<rect x="510.0" y="538.3" width="93.4" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="523.0" y="558.3" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">llm-lora</text>
+<rect x="611.4" y="538.3" width="93.4" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="624.4" y="558.3" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">vlm-lora</text>
+<rect x="712.8" y="538.3" width="118.6" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="725.8" y="558.3" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">stt-whisper</text>
+<rect x="839.4" y="538.3" width="110.2" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="852.4" y="558.3" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">your block</text>
+<line x1="362" y1="609.8571428571429" x2="410" y2="609.8571428571429" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 4"/>
+<circle cx="362" cy="609.8571428571429" r="4" fill="#38bdf8"/>
+<text x="418.0" y="614.9" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="700" fill="#f1f5f9" text-anchor="start">dataset</text>
+<rect x="510.0" y="594.9" width="127.1" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="523.0" y="614.9" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">grpo-prompts</text>
+<rect x="645.1" y="594.9" width="135.5" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="658.1" y="614.9" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">chat-messages</text>
+<rect x="788.5" y="594.9" width="152.3" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="801.5" y="614.9" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">vision-instruct</text>
+<rect x="948.9" y="594.9" width="110.2" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="961.9" y="614.9" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">your block</text>
+<line x1="362" y1="666.4285714285714" x2="410" y2="666.4285714285714" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 4"/>
+<circle cx="362" cy="666.4285714285714" r="4" fill="#38bdf8"/>
+<text x="418.0" y="671.4" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="700" fill="#f1f5f9" text-anchor="start">template</text>
+<rect x="510.0" y="651.4" width="143.9" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="523.0" y="671.5" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">reasoning-tags</text>
+<rect x="661.9" y="651.4" width="135.5" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="674.9" y="671.5" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">chat-template</text>
+<rect x="805.4" y="651.4" width="110.2" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="818.4" y="671.5" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">your block</text>
+<line x1="362" y1="723.0000000000001" x2="410" y2="723.0000000000001" stroke="#f472b6" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 4"/>
+<circle cx="362" cy="723.0000000000001" r="4" fill="#f472b6"/>
+<text x="418.0" y="728.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="700" fill="#f1f5f9" text-anchor="start">rewards</text>
+<rect x="510.0" y="708.0" width="127.1" height="30" rx="15.0" fill="#f472b6" fill-opacity="0.16" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="523.0" y="728.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">format-exact</text>
+<rect x="645.1" y="708.0" width="127.1" height="30" rx="15.0" fill="#f472b6" fill-opacity="0.16" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="658.1" y="728.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">answer-match</text>
+<rect x="780.1" y="708.0" width="127.1" height="30" rx="15.0" fill="#f472b6" fill-opacity="0.16" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="793.1" y="728.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">number-match</text>
+<rect x="915.2" y="708.0" width="143.9" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="928.2" y="728.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">length-penalty</text>
+<line x1="362" y1="779.5714285714286" x2="410" y2="779.5714285714286" stroke="#34d399" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 4"/>
+<circle cx="362" cy="779.5714285714286" r="4" fill="#34d399"/>
+<text x="418.0" y="784.6" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="700" fill="#f1f5f9" text-anchor="start">eval</text>
+<rect x="510.0" y="764.6" width="68.1" height="30" rx="15.0" fill="#34d399" fill-opacity="0.16" stroke="#34d399" stroke-opacity="0.75"/>
+<text x="523.0" y="784.6" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">gsm8k</text>
+<rect x="586.1" y="764.6" width="93.4" height="30" rx="15.0" fill="#34d399" fill-opacity="0.16" stroke="#34d399" stroke-opacity="0.75"/>
+<text x="599.1" y="784.6" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">math-500</text>
+<rect x="687.5" y="764.6" width="59.7" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="700.5" y="784.6" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">mmlu</text>
+<rect x="755.2" y="764.6" width="51.3" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="768.2" y="784.6" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">arc</text>
+<rect x="814.4" y="764.6" width="152.3" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="827.4" y="784.6" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">evalset (yours)</text>
+<line x1="362" y1="836.1428571428572" x2="410" y2="836.1428571428572" stroke="#fb923c" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 4"/>
+<circle cx="362" cy="836.1428571428572" r="4" fill="#fb923c"/>
+<text x="418.0" y="841.1" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="700" fill="#f1f5f9" text-anchor="start">export</text>
+<rect x="510.0" y="821.1" width="85.0" height="30" rx="15.0" fill="#fb923c" fill-opacity="0.16" stroke="#fb923c" stroke-opacity="0.75"/>
+<text x="523.0" y="841.2" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">adapter</text>
+<rect x="603.0" y="821.1" width="127.1" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="616.0" y="841.2" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">merged-16bit</text>
+<rect x="738.0" y="821.1" width="59.7" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="751.0" y="841.2" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">gguf</text>
+<line x1="362" y1="892.7142857142858" x2="410" y2="892.7142857142858" stroke="#a78bfa" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 4"/>
+<circle cx="362" cy="892.7142857142858" r="4" fill="#a78bfa"/>
+<text x="418.0" y="897.7" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="700" fill="#f1f5f9" text-anchor="start">runtime</text>
+<rect x="510.0" y="877.7" width="59.7" height="30" rx="15.0" fill="#a78bfa" fill-opacity="0.16" stroke="#a78bfa" stroke-opacity="0.75"/>
+<text x="523.0" y="897.8" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">host</text>
+<rect x="577.7" y="877.7" width="85.0" height="30" rx="15.0" fill="#161d2a" stroke="#263041" stroke-dasharray="4 3"/>
+<text x="590.7" y="897.8" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">sandbox</text>
+<rect x="1108" y="517" width="380" height="406" rx="16" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.45"/>
+<g transform="translate(1146,557)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#a78bfa" fill-opacity="0.12" stroke="#a78bfa" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M-9 -6 h18 M-9 0 h18 M-9 6 h18" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-3" cy="-6" r="2.2" fill="#0a0e17" stroke="#a78bfa" stroke-width="2"/><circle cx="4" cy="0" r="2.2" fill="#0a0e17" stroke="#a78bfa" stroke-width="2"/><circle cx="-6" cy="6" r="2.2" fill="#0a0e17" stroke="#a78bfa" stroke-width="2"/></g>
+</g>
+<text x="1180.0" y="553.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="700" fill="#f1f5f9" text-anchor="start">Every parameter</text>
+<text x="1180.0" y="573.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="500" fill="#a78bfa" text-anchor="start">value · default · who set it · meaning</text>
+<text x="1132.0" y="613.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">train.loss_type</text>
+<text x="1464.0" y="613.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="end">dapo ◀</text>
+<text x="1132.0" y="640.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">train.epsilon_high</text>
+<text x="1464.0" y="640.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="end">0.28 ◀</text>
+<text x="1132.0" y="667.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">train.beta</text>
+<text x="1464.0" y="667.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="end">0.0 ◀</text>
+<text x="1132.0" y="694.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">train.learning_rate</text>
+<text x="1464.0" y="694.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="end">5e-06</text>
+<text x="1132.0" y="721.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">train.num_generations</text>
+<text x="1464.0" y="721.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="end">4</text>
+<text x="1132.0" y="748.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">model.r</text>
+<text x="1464.0" y="748.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="end">32 ◀</text>
+<text x="1132.0" y="775.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">rewards.answer-match.weight</text>
+<text x="1464.0" y="775.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="end">1.0</text>
+<text x="1132.0" y="802.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">eval.gsm8k.max_items</text>
+<text x="1464.0" y="802.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="end">250</text>
+<text x="1132.0" y="825.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="start">… and every other value, none hidden</text>
+<rect x="1128" y="845" width="340" height="58" rx="12" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.5"/>
+<g transform="translate(1158,874)">
+<rect x="-18.0" y="-18.0" width="36" height="36" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
+<g transform="scale(0.8)"><circle cy="-4" r="5" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-9 10 a9 8 0 0 1 18 0" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="1186.0" y="870.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="700" fill="#f1f5f9" text-anchor="start">You approve:</text>
+<text x="1186.0" y="890.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">nawat exp approve · code</text>
+<text x="1452.0" y="882.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="20" font-weight="700" fill="#6ee7b7" text-anchor="end">0561A2</text>
+<text x="80.0" y="1015.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">LIFE OF AN EXPERIMENT</text>
+<text x="1520.0" y="1015.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#64748b" text-anchor="end">nawat exp plan → approve → run → report / compare</text>
+<rect x="80.0" y="1037.0" width="1440.0" height="150.0" rx="20" fill="#111723" stroke="#1e2633" />
+<line x1="190" y1="1089" x2="1410" y2="1089" stroke="#34d399" stroke-opacity="0.35" stroke-width="2"/>
+<circle cx="190.0" cy="1089" r="15" fill="#0a0e17" fill-opacity="1" stroke="#34d399" stroke-width="2"/>
+<text x="190.0" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">1</text>
+<text x="190.0" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Plan</text>
+<text x="190.0" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">freeze code + params</text>
+<circle cx="364.3" cy="1089" r="15" fill="#34d399" fill-opacity="0.9" stroke="#34d399" stroke-width="2"/>
+<text x="364.3" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#0a0e17" text-anchor="middle">2</text>
+<text x="364.3" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Approve</text>
+<text x="364.3" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">you, at a terminal, signed</text>
+<circle cx="538.6" cy="1089" r="15" fill="#0a0e17" fill-opacity="1" stroke="#34d399" stroke-width="2"/>
+<text x="538.6" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">3</text>
+<text x="538.6" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Stage</text>
+<text x="538.6" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">cache → S3 → hub once</text>
+<circle cx="712.9" cy="1089" r="15" fill="#0a0e17" fill-opacity="1" stroke="#34d399" stroke-width="2"/>
+<text x="712.9" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">4</text>
+<text x="712.9" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Train</text>
+<text x="712.9" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">the fixed backbone</text>
+<circle cx="887.1" cy="1089" r="15" fill="#0a0e17" fill-opacity="1" stroke="#34d399" stroke-width="2"/>
+<text x="887.1" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">5</text>
+<text x="887.1" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Trace</text>
+<text x="887.1" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">every rollout, every round</text>
+<circle cx="1061.4" cy="1089" r="15" fill="#0a0e17" fill-opacity="1" stroke="#34d399" stroke-width="2"/>
+<text x="1061.4" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">6</text>
+<text x="1061.4" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Measure</text>
+<text x="1061.4" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">evals, fingerprinted</text>
+<circle cx="1235.7" cy="1089" r="15" fill="#0a0e17" fill-opacity="1" stroke="#34d399" stroke-width="2"/>
+<text x="1235.7" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">7</text>
+<text x="1235.7" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Publish</text>
+<text x="1235.7" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">one folder in S3</text>
+<circle cx="1410.0" cy="1089" r="15" fill="#0a0e17" fill-opacity="1" stroke="#34d399" stroke-width="2"/>
+<text x="1410.0" y="1094.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">8</text>
+<text x="1410.0" y="1139.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Compare</text>
+<text x="1410.0" y="1161.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="middle">only what differs</text>
+<text x="80.0" y="1247.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">WHAT YOU CAN TRAIN</text>
+<text x="812.0" y="1247.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">ONE FOLDER PER EXPERIMENT</text>
+<rect x="80.0" y="1269.0" width="708.0" height="372.0" rx="20" fill="#111723" stroke="#1e2633" />
+<circle cx="114" cy="1320" r="5" fill="#38bdf8"/>
+<text x="130.0" y="1325.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#f1f5f9" text-anchor="start">LLM</text>
+<rect x="250.0" y="1305.0" width="51.2" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="263.0" y="1325.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">SFT</text>
+<rect x="309.2" y="1305.0" width="52.8" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="322.2" y="1325.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">CPT</text>
+<rect x="370.0" y="1305.0" width="56.2" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="383.0" y="1325.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">DPO</text>
+<rect x="434.2" y="1305.0" width="66.0" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="447.2" y="1325.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">GRPO</text>
+<rect x="508.3" y="1305.0" width="65.6" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="521.3" y="1325.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">DAPO</text>
+<rect x="581.8" y="1305.0" width="65.2" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="594.8" y="1325.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">GSPO</text>
+<circle cx="114" cy="1372" r="5" fill="#38bdf8"/>
+<text x="130.0" y="1377.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#f1f5f9" text-anchor="start">VLM</text>
+<rect x="250.0" y="1357.0" width="51.2" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="263.0" y="1377.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">SFT</text>
+<rect x="309.2" y="1357.0" width="120.6" height="30" rx="15.0" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.75"/>
+<text x="322.2" y="1377.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">GRPO (GSPO)</text>
+<circle cx="114" cy="1424" r="5" fill="#f472b6"/>
+<text x="130.0" y="1429.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#f1f5f9" text-anchor="start">TTS</text>
+<rect x="250.0" y="1409.0" width="182.7" height="30" rx="15.0" fill="#f472b6" fill-opacity="0.16" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="263.0" y="1429.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">Orpheus · SNAC codes</text>
+<circle cx="114" cy="1476" r="5" fill="#f472b6"/>
+<text x="130.0" y="1481.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#f1f5f9" text-anchor="start">STT</text>
+<rect x="250.0" y="1461.0" width="83.2" height="30" rx="15.0" fill="#f472b6" fill-opacity="0.16" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="263.0" y="1481.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">Whisper</text>
+<circle cx="114" cy="1528" r="5" fill="#a78bfa"/>
+<text x="130.0" y="1533.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#f1f5f9" text-anchor="start">Embedding</text>
+<rect x="250.0" y="1513.0" width="277.2" height="30" rx="15.0" fill="#a78bfa" fill-opacity="0.16" stroke="#a78bfa" stroke-opacity="0.75"/>
+<text x="263.0" y="1533.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">contrastive · sentence-transformers</text>
+<circle cx="114" cy="1580" r="5" fill="#fbbf24"/>
+<text x="130.0" y="1585.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" fill="#f1f5f9" text-anchor="start">Decision</text>
+<rect x="250.0" y="1565.0" width="297.8" height="30" rx="15.0" fill="#fbbf24" fill-opacity="0.16" stroke="#fbbf24" stroke-opacity="0.75"/>
+<text x="263.0" y="1585.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9" text-anchor="start">typed answers · choice · yes/no · score</text>
+<text x="110.0" y="1619.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#64748b" text-anchor="start">12 built-in presets, each from the official Unsloth notebook for its method.</text>
+<rect x="812.0" y="1269.0" width="708.0" height="372.0" rx="20" fill="#111723" stroke="#1e2633" />
+<text x="842.0" y="1311.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#f1f5f9" text-anchor="start">runs/llm-dapo/baseline/</text>
+<path d="M852.0 1324 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="868.0" y="1342.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#f1f5f9" text-anchor="start">adapter/</text>
+<text x="1492.0" y="1342.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">the trained LoRA</text>
+<path d="M852.0 1355 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="868.0" y="1373.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#f1f5f9" text-anchor="start">checkpoint/</text>
+<text x="1492.0" y="1373.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">last trainer checkpoint</text>
+<path d="M852.0 1386 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="868.0" y="1404.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#f1f5f9" text-anchor="start">record/</text>
+<text x="1492.0" y="1404.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">run log · metrics · run.json</text>
+<path d="M852.0 1417 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="868.0" y="1435.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#6ee7b7" text-anchor="start">experiment/</text>
+<path d="M878.0 1448 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="894.0" y="1466.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">plan.md</text>
+<text x="1492.0" y="1466.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">every parameter</text>
+<path d="M878.0 1479 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="894.0" y="1497.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">code/</text>
+<text x="1492.0" y="1497.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">the exact code that ran</text>
+<path d="M878.0 1510 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="894.0" y="1528.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">env · effective_config</text>
+<text x="1492.0" y="1528.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">GPU, versions, every field</text>
+<path d="M878.0 1541 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="894.0" y="1559.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="start">eval/ · report.md</text>
+<text x="1492.0" y="1559.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">scores · text for your agent</text>
+<path d="M852.0 1572 v13 h10" fill="none" stroke="#64748b" stroke-opacity="0.6"/>
+<text x="868.0" y="1590.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#6ee7b7" text-anchor="start">traces/</text>
+<text x="1492.0" y="1590.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748b" text-anchor="end">every completion, every reward</text>
+<text x="80.0" y="1701.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">FAIR COMPARISON</text>
+<text x="812.0" y="1701.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">OPENCODE SANDBOX · OPTIONAL</text>
+<rect x="80.0" y="1723.0" width="708.0" height="300.0" rx="20" fill="#111723" stroke="#1e2633" />
+<g transform="translate(124,1767)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M0 -10 v19 M-6 9 h12 M-10 -6 h20 M-10 -6 l-3 7 h6 z M10 -6 l-3 7 h6 z" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="160.0" y="1763.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="600" fill="#f1f5f9" text-anchor="start">Numbers sit side by side only when measured the same way.</text>
+<text x="160.0" y="1784.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">Each eval has a fingerprint: code, test data, metric, generation settings.</text>
+<text x="120.0" y="1827.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#64748b" text-anchor="start">eval (illustrative values)</text>
+<text x="330.0" y="1827.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#64748b" text-anchor="start">experiment A</text>
+<text x="460.0" y="1827.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#64748b" text-anchor="start">experiment B</text>
+<text x="590.0" y="1827.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#64748b" text-anchor="start">compare shows</text>
+<line x1="110" y1="1839" x2="758.0" y2="1839" stroke="#1e2633"/>
+<text x="120.0" y="1869.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">gsm8k · accuracy</text>
+<text x="330.0" y="1869.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">0.612</text>
+<text x="460.0" y="1869.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">0.648</text>
+<circle cx="595" cy="1864" r="5" fill="#34d399"/>
+<text x="608.0" y="1869.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">same fingerprint</text>
+<text x="120.0" y="1903.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">math-500 · accuracy</text>
+<text x="330.0" y="1903.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">0.284</text>
+<text x="460.0" y="1903.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">0.301</text>
+<circle cx="595" cy="1898" r="5" fill="#34d399"/>
+<text x="608.0" y="1903.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">same fingerprint</text>
+<text x="120.0" y="1937.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">evalset (yours) · cer</text>
+<text x="330.0" y="1937.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">0.071</text>
+<text x="460.0" y="1937.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">0.064</text>
+<circle cx="595" cy="1932" r="5" fill="#34d399"/>
+<text x="608.0" y="1937.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">same fingerprint</text>
+<text x="120.0" y="1971.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#f1f5f9" text-anchor="start">mmlu · accuracy</text>
+<text x="330.0" y="1971.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f87171" text-anchor="start">≠</text>
+<text x="460.0" y="1971.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="400" fill="#f87171" text-anchor="start">≠</text>
+<circle cx="595" cy="1966" r="5" fill="#f87171"/>
+<text x="608.0" y="1971.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#f87171" text-anchor="start">withheld: differs</text>
+<rect x="812.0" y="1723.0" width="708.0" height="300.0" rx="20" fill="#111723" stroke="#1e2633" />
+<rect x="842.0" y="1753" width="648.0" height="240" rx="14" fill="#0d121c" stroke="#a78bfa" stroke-opacity="0.55" stroke-dasharray="6 4"/>
+<g transform="translate(882.0,1793)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#a78bfa" fill-opacity="0.12" stroke="#a78bfa" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M0 -10 l9 5 v10 l-9 5 l-9 -5 v-10 z M-9 -5 l9 5 l9 -5 M0 0 v10" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="918.0" y="1789.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="start">Docker container + GPU</text>
+<text x="918.0" y="1809.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start">an agent trains in isolation; your host stays untouched</text>
+<path d="M868.0 1846 l4 4 l7 -8" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="886.0" y="1851.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#f1f5f9" text-anchor="start">root, terminal, install anything</text>
+<path d="M868.0 1873 l4 4 l7 -8" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="886.0" y="1878.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#f1f5f9" text-anchor="start">GPU and network</text>
+<path d="M868.0 1900 l4 4 l7 -8" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="886.0" y="1905.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#f1f5f9" text-anchor="start">workspace at /workspace</text>
+<path d="M868.0 1927 l4 4 l7 -8" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="886.0" y="1932.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#f1f5f9" text-anchor="start">plan experiments, publish results</text>
+<path d="M1186.0 1841 l8 8 M1194.0 1841 l-8 8" stroke="#f87171" stroke-width="2" stroke-linecap="round"/>
+<text x="1204.0" y="1851.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#94a3b8" text-anchor="start">approve an experiment</text>
+<path d="M1186.0 1868 l8 8 M1194.0 1868 l-8 8" stroke="#f87171" stroke-width="2" stroke-linecap="round"/>
+<text x="1204.0" y="1878.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#94a3b8" text-anchor="start">delete from object storage</text>
+<path d="M1186.0 1895 l8 8 M1194.0 1895 l-8 8" stroke="#f87171" stroke-width="2" stroke-linecap="round"/>
+<text x="1204.0" y="1905.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#94a3b8" text-anchor="start">see the host&#x27;s files or keys</text>
+<text x="800.0" y="2079.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#64748b" text-anchor="middle">Nawāt (نواة, “nucleus”) — train locally, store durably, reproduce every run.</text>
+</svg>

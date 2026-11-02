@@ -1,0 +1,12 @@
+# Unsloth nb/Qwen3_5_(4B)-Decision.ipynb — typed decisions (choice / yes-no / score), calibrated.
+[preset]
+backbone    = "decision"
+description = "Typed decision model on Qwen3.5-4B, calibrated (decision notebook)"
+model       = "models/unsloth/Qwen3.5-4B"
+dataset     = "datasets/LocalLLaMA/typed-decisions"
+
+[blocks]
+model   = "decision-lora"
+dataset = "decision-rows"
+eval    = ["decision-holdout", "decision-test"]
+export  = ["adapter"]

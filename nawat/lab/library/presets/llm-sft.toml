@@ -1,0 +1,25 @@
+# Unsloth nb/Qwen3_(14B)-Reasoning-Conversational.ipynb — 4-bit QLoRA SFT on FineTome-100k.
+[preset]
+backbone    = "sft"
+description = "Text SFT on conversations (Qwen3 conversational notebook)"
+model       = "models/unsloth/Qwen3-14B"
+dataset     = "datasets/mlabonne/FineTome-100k"
+
+[blocks]
+model    = "llm-lora"
+dataset  = "chat-messages"
+template = "chat-template"
+eval     = ["heldout-generate"]
+export   = ["adapter"]
+
+[params.model]
+load_in_4bit = true
+r            = 32
+lora_alpha   = 32
+
+[params.dataset]
+eval_size = 200
+
+[params."eval.heldout-generate"]
+metric = "cer"
+max_items = 50

@@ -20,18 +20,17 @@ from typing import Any, AsyncIterator, Iterator
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from . import metrics
 from .cache import Cache, open_cache
 from .config import Config
 from . import checkpoints as checkpoint_store
-from .checkpoints import CheckpointPolicy
 from .errors import NawatError
 from .executor import Executor, RunQueue, process_alive
 from .health import run_checks
-from .keys import KINDS, Key
-from .runs import RunSpec, RunState, RunStore, rebuild_from_disk
+from .keys import KINDS
+from .runs import RunState, RunStore, rebuild_from_disk
 from .sessions import ServingBackend, SessionManager
 from .units import human_bytes
 
@@ -39,37 +38,6 @@ IDLE_SWEEP_SECONDS = 15.0
 
 
 # -- request bodies -----------------------------------------------------------
-
-
-class SubmitBody(BaseModel):
-    script: str = Field(description="Path to a .py or .ipynb inside the workspace")
-    model: str | None = None
-    datasets: list[str] = Field(default_factory=list)
-    inputs: list[str] = Field(default_factory=list)
-    params: dict[str, str] = Field(default_factory=dict)
-    notes: str = ""
-    run_id: str | None = None
-    name: str | None = Field(default=None, description="Folder in object storage; the run id if unset")
-    checkpoint_lineage: str = Field(default="", description="Derived from the script and inputs if empty")
-    resume: bool = Field(default=True, description="Continue from this lineage's newest checkpoint")
-    keep_checkpoints: bool = Field(default=False, description="Keep them on local disk after success")
-    publish_checkpoints: bool = Field(default=True, description="Replicate the last one to object storage")
-
-    def to_spec(self) -> RunSpec:
-        return RunSpec(
-            script=self.script,
-            model=Key.parse(self.model) if self.model else None,
-            datasets=tuple(Key.parse(k) for k in self.datasets),
-            inputs=tuple(Key.parse(k) for k in self.inputs),
-            params=dict(self.params),
-            notes=self.notes,
-            checkpoints=CheckpointPolicy(
-                lineage=self.checkpoint_lineage,
-                resume=self.resume,
-                keep=self.keep_checkpoints,
-                publish=self.publish_checkpoints,
-            ),
-        )
 
 
 class SessionBody(BaseModel):
@@ -81,15 +49,6 @@ class SessionBody(BaseModel):
 class AdapterBody(BaseModel):
     key: str
     name: str | None = None
-
-
-class EvaluateBody(BaseModel):
-    data: str = Field(description="A dataset key or local path holding the eval JSONL")
-    file: str | None = None
-    base: str | None = None
-    limit: int | None = None
-    label: str | None = None
-    per_sample: bool = False
 
 
 class PublishBody(BaseModel):
@@ -261,6 +220,9 @@ def create_app(
 
     @app.post("/cache/publish", dependencies=guard)
     def publish(body: PublishBody) -> dict[str, Any]:
+        from .keys import require_not_experiment_output
+
+        require_not_experiment_output(body.key)
         result = platform.cache.publish(body.directory, body.key, keep_local=body.keep_local)
         return {
             "key": str(result.key),
@@ -323,32 +285,36 @@ def create_app(
 
     # -- workspace ---------------------------------------------------------
 
-    @app.get("/scripts", dependencies=guard)
-    def scripts() -> list[dict[str, Any]]:
-        """Training scripts and notebooks available to submit (FR-3.4)."""
-        root = platform.config.workspace_root
-        found = []
-        if root.is_dir():
-            for path in sorted(root.rglob("*")):
-                if path.suffix in (".py", ".ipynb") and not any(
-                    part.startswith((".", "__")) for part in path.relative_to(root).parts
-                ):
-                    stat = path.stat()
-                    found.append(
-                        {
-                            "path": str(path.relative_to(root)),
-                            "kind": "notebook" if path.suffix == ".ipynb" else "script",
-                            "bytes": stat.st_size,
-                            "modified": stat.st_mtime,
-                        }
-                    )
-        return found
-
     # -- runs --------------------------------------------------------------
 
-    @app.post("/runs", status_code=201, dependencies=guard)
-    def submit(body: SubmitBody) -> dict[str, Any]:
-        record = platform.queue.submit(body.to_spec(), body.run_id, name=body.name)
+    # Training starts from experiments only: a planned, approved experiment is
+    # queued by name. There is no endpoint that runs an arbitrary script.
+
+    @app.get("/experiments", dependencies=guard)
+    def list_experiments() -> list[dict[str, Any]]:
+        from .lab import report as lab_report
+        from .lab.experiment import list_experiments as all_experiments
+
+        return [{"name": e.name, "status": lab_report.status(e), "preset": e.data["preset"]["name"],
+                 "backbone": e.data["backbone"]["name"], "created_at": e.data.get("created_at")}
+                for e in all_experiments(platform.config)]
+
+    @app.get("/experiments/{name:path}/report", dependencies=guard)
+    def experiment_report(name: str) -> dict[str, Any]:
+        from .lab import report as lab_report
+        from .lab.experiment import find
+
+        return lab_report.build(find(platform.config, name), platform.config)
+
+    @app.post("/experiments/{name:path}/run", status_code=201, dependencies=guard)
+    def run_experiment(name: str) -> dict[str, Any]:
+        """Queue an approved experiment. Approval itself is never possible over HTTP."""
+        from .lab.cli import experiment_spec
+        from .lab.experiment import find
+
+        experiment = find(platform.config, name)
+        record = platform.queue.submit(experiment_spec(experiment), None, name=experiment.name)
+        experiment.add_attempt(record.id)
         return record.to_json()
 
     @app.get("/runs", dependencies=guard)
@@ -386,39 +352,6 @@ def create_app(
     @app.post("/runs/{run_id}/cancel", dependencies=guard)
     def cancel(run_id: str) -> dict[str, Any]:
         return platform.executor.cancel(run_id).to_json()
-
-    # -- evaluation --------------------------------------------------------
-
-    @app.post("/runs/{run_id}/evaluate", dependencies=guard)
-    def evaluate_run(run_id: str, body: EvaluateBody) -> dict[str, Any]:
-        """Score the run's adapter against a held-out set (FR-4.7).
-
-        Synchronous: evaluation sets are small and the caller wants the number.
-        """
-        from .evaluate import Evaluator
-
-        evaluator = Evaluator(platform.cache, platform.runs, platform.sessions)
-        result = evaluator.evaluate_run(
-            run_id, body.data, base=body.base, file_name=body.file,
-            limit=body.limit, label=body.label,
-        )
-        summary = result.to_json()
-        if not body.per_sample:
-            summary.pop("per_sample")
-        return summary
-
-    @app.get("/runs/{run_id}/evaluations", dependencies=guard)
-    def list_evaluations(run_id: str) -> list[dict[str, Any]]:
-        platform.runs.get(run_id)
-        out = []
-        for path in sorted(platform.runs.directory(run_id).glob("eval-*.json")):
-            try:
-                data = json.loads(path.read_text())
-                data.pop("per_sample", None)
-                out.append(data)
-            except ValueError:
-                continue
-        return out
 
     # -- metrics -----------------------------------------------------------
 

@@ -1,0 +1,23 @@
+# The lab's guarantees, checked on every push: one managed way to train,
+# approval before anything runs, no hidden parameters, fair evals, nothing
+# edited after use. CPU only — no GPU, Torch or Unsloth needed.
+name: guarantees
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install (locked)
+        run: uv sync --locked --extra api
+      - name: Lint the lab
+        run: uv run pyflakes nawat/lab tests
+      - name: Guarantee tests
+        run: uv run pytest -q

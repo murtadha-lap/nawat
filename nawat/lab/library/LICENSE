@@ -1,0 +1,47 @@
+# Licensing of the experiment library
+
+The rest of this repository is under the PolyForm Noncommercial License 1.0.0
+(see [../../../LICENSE](../../../LICENSE)). **The files listed below are not**,
+and cannot be.
+
+They are derived from Unsloth's notebooks, which Unsloth publishes under the
+**GNU Lesser General Public License v3.0**:
+
+> This notebook and all Unsloth notebooks are licensed LGPL-3.0
+> — <https://github.com/unslothai/notebooks?tab=LGPL-3.0-1-ov-file#readme>
+
+The backbones reproduce each notebook's training flow and configuration values;
+several blocks reproduce its data preparation, chat template and reward
+functions. That makes them derivative works, and LGPL-3.0 does not permit adding
+restrictions such as a noncommercial clause to a work derived from it.
+
+**So these files are under LGPL-3.0**, and you may use them commercially on
+LGPL-3.0's terms, whatever the licence on the rest of the repository says. The
+changes made to them — the parameter declarations, the Nawāt context calls and
+the commentary — are contributed under LGPL-3.0 as well.
+
+| Files | Derived from (unslothai/notebooks, `nb/`) |
+| --- | --- |
+| `backbones/sft.py`, `model/llm-lora.py`, `dataset/chat-messages.py`, `template/chat-template.py` | `Qwen3_(14B)-Reasoning-Conversational.ipynb` |
+| `backbones/sft.py`, `model/vlm-lora.py`, `dataset/vision-instruct.py` | `Qwen3_5_(0_8B)_Vision.ipynb` |
+| `backbones/cpt.py`, `dataset/text-corpus.py` | `Mistral_v0.3_(7B)-CPT.ipynb` |
+| `backbones/dpo.py`, `dataset/preference-pairs.py`, `presets/llm-dpo.toml` | `Zephyr_(7B)-DPO.ipynb` |
+| `backbones/grpo.py`, `dataset/grpo-prompts.py`, `template/reasoning-tags.py`, `rewards/format-exact.py`, `rewards/format-approx.py`, `rewards/answer-match.py`, `rewards/number-match.py`, `../support.py` (`solution_pattern`) | `Qwen3_(4B)-GRPO.ipynb` |
+| `backbones/grpo.py`, `rewards/tags-format.py`, `rewards/tags-answer.py`, `presets/vlm-grpo.toml` | `Qwen3_5_(4B)_Vision_GRPO.ipynb` |
+| `backbones/tts.py`, `model/tts-orpheus.py`, `dataset/tts-snac.py` | `Orpheus_(3B)-TTS.ipynb` |
+| `backbones/stt.py`, `model/stt-whisper.py`, `dataset/speech-transcripts.py` | `Whisper.ipynb` |
+| `backbones/embedding.py`, `model/embedding-lora.py` | `Qwen3_Embedding_(0_6B).ipynb` |
+| `backbones/decision.py`, `model/decision-lora.py`, `dataset/decision-rows.py`, `eval/decision-holdout.py`, `eval/decision-test.py` | `Qwen3_5_(4B)-Decision.ipynb` |
+| `presets/*.toml` carrying a notebook's values | the notebook named in each preset's first line |
+
+Files not listed — the other eval blocks, the export and runtime blocks,
+`rewards/length-penalty.py`, the templates in `_templates/` — were written for
+Nawāt and are under the repository's licence.
+
+Nothing here restricts Unsloth itself: it is a separate work, installed
+separately, under its own licence.
+
+---
+
+*Not legal advice. If the boundary between the two licences matters to you
+commercially, have a lawyer look at it.*

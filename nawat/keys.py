@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .errors import InvalidKey
+from .errors import InvalidKey, Protected
 
 KINDS = ("models", "datasets", "runs", "exports")
 HUB_KINDS = ("models", "datasets")
@@ -101,3 +101,19 @@ class Key:
     def child(self, *segments: str) -> "Key":
         """Derive a sub-key, e.g. ``runs/<id>`` -> ``runs/<id>/adapter``."""
         return Key.parse("/".join((str(self), *segments)))
+
+
+def require_not_experiment_output(key: "str | Key") -> "Key":
+    """``runs/`` holds what experiments produced, and nothing published by hand.
+
+    A hand-trained adapter uploaded there would sit beside experiment results
+    with none of their guarantees — fixed backbone, declared parameters,
+    approval, traces — and look exactly like one of them.
+    """
+    parsed = Key.parse(key)
+    if parsed.kind == "runs":
+        raise Protected(
+            f"{parsed} is under runs/, which only experiments write to.",
+            "Publish models under models/ and data under datasets/; trained outputs come from: nawat exp run <experiment>.",
+        )
+    return parsed

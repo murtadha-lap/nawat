@@ -1,0 +1,48 @@
+# Unsloth nb/Qwen3_5_(4B)_Vision_GRPO.ipynb — MathVista, GSPO + Dr. GRPO loss, two rewards.
+[preset]
+backbone    = "grpo"
+description = "Vision GRPO (GSPO) on MathVista (Qwen3.5 vision GRPO notebook)"
+model       = "models/unsloth/Qwen3.5-4B"
+dataset     = "datasets/AI4Math/MathVista"
+
+[blocks]
+model    = "vlm-lora"
+dataset  = "vision-instruct"
+template = "reasoning-tags"
+rewards  = ["tags-format", "tags-answer"]
+export   = ["adapter"]
+
+[params.backbone]
+loss_type                  = "dr_grpo"
+importance_sampling_level  = "sequence"
+mask_truncated_completions = false
+adam_beta1                 = 0.9
+adam_beta2                 = 0.99
+weight_decay               = 0.1
+warmup_ratio               = 0.1
+lr_scheduler_type          = "cosine"
+max_grad_norm              = 0.1
+num_generations            = 2
+max_prompt_length          = 1024
+max_completion_length      = 1024
+max_steps                  = 60
+save_steps                 = 60
+
+[params.model]
+finetune_vision_layers = false
+
+[params.dataset]
+split           = "testmini"
+image_column    = "decoded_image"
+text_column     = "answer"
+question_column = "question"
+resize          = 512
+convert_rgb     = true
+numeric_only    = true
+
+[params.template]
+mode            = "inline"
+reasoning_start = "<REASONING>"
+reasoning_end   = "</REASONING>"
+solution_start  = "<SOLUTION>"
+solution_end    = "</SOLUTION>"

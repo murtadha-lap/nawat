@@ -1,0 +1,289 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1936" viewBox="0 0 1600 1936">
+<defs>
+  <radialGradient id="halo" cx="0.5" cy="0" r="0.9">
+    <stop offset="0" stop-color="#34d399" stop-opacity="0.10"/><stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0d2a22"/><stop offset="1" stop-color="#0b1c1a"/>
+  </linearGradient>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M1 1 L9 5 L1 9" fill="none" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<rect width="1600" height="1936" fill="#0a0e17"/>
+<ellipse cx="800.0" cy="0" rx="1120.0" ry="700" fill="url(#halo)"/>
+<g transform="translate(112,118)">
+<rect x="-32.0" y="-32.0" width="64" height="64" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
+<g transform="scale(1.5)"><circle r="6" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><ellipse rx="11" ry="4" transform="rotate(-30)" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="-8" r="1.8" fill="#34d399"/></g>
+</g>
+<text x="168.0" y="116.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="44" font-weight="700" fill="#f1f5f9" text-anchor="start">Nawāt</text>
+<text x="341.9" y="116.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="32" font-weight="600" fill="#6ee7b7" text-anchor="start">نواة</text>
+<text x="168.0" y="146.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="400" fill="#94a3b8" text-anchor="start">From the Linux kernel to your training script — how a local GPU workstation becomes a research lab.</text>
+<rect x="1133.2" y="96" width="386.8" height="34" rx="17" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.4"/>
+<text x="1326.6" y="118.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="#6ee7b7" text-anchor="middle">Train locally · Store durably · Reproduce every run</text>
+<rect x="80" y="210" width="1440" height="250" rx="20" fill="#111723" stroke="#1e2633"/>
+<text x="124.0" y="266.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">THE IDEA</text>
+<text x="124.0" y="310.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="700" fill="#f1f5f9" text-anchor="start">A small disk that</text>
+<text x="124.0" y="352.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="700" fill="#f1f5f9" text-anchor="start">behaves like a big one.</text>
+<text x="124.0" y="396.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="400" fill="#94a3b8" text-anchor="start">Object storage keeps the whole research library.</text>
+<text x="124.0" y="422.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="400" fill="#94a3b8" text-anchor="start">The local disk holds only what is in use right now.</text>
+<rect x="648" y="262" width="168" height="146" rx="16" fill="#0d121c" stroke="#1e2633"/>
+<g transform="translate(732.0,306)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><circle r="9" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-3" cy="-2" r="1" fill="#fbbf24"/><circle cx="3" cy="-2" r="1" fill="#fbbf24"/><path d="M-4 3 q4 4 8 0" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="732.0" y="358.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9" text-anchor="middle">Hugging Face</text>
+<text x="732.0" y="382.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">first use only</text>
+<line x1="824" y1="335" x2="860" y2="335" stroke="#64748b" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="868" y="262" width="168" height="146" rx="16" fill="#0d121c" stroke="#1e2633"/>
+<g transform="translate(952.0,306)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#fb923c" fill-opacity="0.12" stroke="#fb923c" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M-8 6 h15 a5 5 0 0 0 0 -10 a7 7 0 0 0 -13 -1 a5 5 0 0 0 -2 11 z" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="952.0" y="358.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9" text-anchor="middle">Object storage</text>
+<text x="952.0" y="382.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">source of truth</text>
+<line x1="1044" y1="335" x2="1080" y2="335" stroke="#64748b" stroke-width="1.6" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<rect x="1088" y="262" width="168" height="146" rx="16" fill="#0d121c" stroke="#1e2633"/>
+<g transform="translate(1172.0,306)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-10" y="-8" width="20" height="16" rx="3" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-6 3 h7" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="3" r="1.2" fill="#34d399"/></g>
+</g>
+<text x="1172.0" y="358.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9" text-anchor="middle">Local cache</text>
+<text x="1172.0" y="382.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">bounded working set</text>
+<line x1="1264" y1="335" x2="1300" y2="335" stroke="#64748b" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="1308" y="262" width="168" height="146" rx="16" fill="#0d121c" stroke="#1e2633"/>
+<g transform="translate(1392.0,306)">
+<rect x="-22.0" y="-22.0" width="44" height="44" rx="12" fill="#38bdf8" fill-opacity="0.12" stroke="#38bdf8" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M2 -11 L-6 2 H0 L-2 11 L6 -2 H0 Z" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="1392.0" y="358.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="600" fill="#f1f5f9" text-anchor="middle">Unsloth · vLLM</text>
+<text x="1392.0" y="382.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">train &amp; serve</text>
+<text x="842.0" y="324.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="middle">once</text>
+<text x="1062.0" y="324.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="middle">stage</text>
+<text x="1062.0" y="356.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="middle">publish</text>
+<text x="1282.0" y="324.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="11.5" font-weight="400" fill="#64748b" text-anchor="middle">lease</text>
+<text x="80.0" y="530.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">HOW IT IS BUILT</text>
+<text x="280.0" y="530.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#64748b" text-anchor="start">Read from the bottom up — each layer stands on the one below it.</text>
+<rect x="80" y="560" width="1440" height="92" rx="16" fill="#111723" stroke="#1e2633"/>
+<text x="112.0" y="611.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">07</text>
+<g transform="translate(180,606.0)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#f472b6" fill-opacity="0.12" stroke="#f472b6" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><circle cy="-4" r="5" fill="none" stroke="#f472b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-9 10 a9 8 0 0 1 18 0" fill="none" stroke="#f472b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="220.0" y="602.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#f1f5f9" text-anchor="start">You</text>
+<text x="220.0" y="626.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Ordinary Python, using Nawāt keys</text>
+<rect x="540.0" y="589.0" width="156.7" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="554.0" y="611.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Jupyter notebook</text>
+<rect x="706.7" y="589.0" width="133.7" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="720.7" y="611.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Training script</text>
+<rect x="850.4" y="589.0" width="217.8" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="864.4" y="611.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">OpenAI-compatible client</text>
+<rect x="80" y="666" width="1440" height="92" rx="16" fill="#111723" stroke="#1e2633"/>
+<text x="112.0" y="717.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">06</text>
+<g transform="translate(180,712.0)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#a78bfa" fill-opacity="0.12" stroke="#a78bfa" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-11" y="-9" width="22" height="18" rx="3" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-6 -3 l4 3 l-4 3 M1 4 h5" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="220.0" y="708.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#f1f5f9" text-anchor="start">Interfaces</text>
+<text x="220.0" y="732.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">One implementation, three doors</text>
+<rect x="540.0" y="695.0" width="102.0" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="554.0" y="717.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">nawat CLI</text>
+<rect x="652.0" y="695.0" width="108.5" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="666.0" y="717.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Python API</text>
+<rect x="770.5" y="695.0" width="169.7" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="784.5" y="717.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">REST control plane</text>
+<rect x="950.2" y="695.0" width="200.1" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="964.2" y="717.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">/v1 OpenAI-compatible</text>
+<rect x="74" y="766" width="1452" height="304" rx="24" fill="#34d399" fill-opacity="0.05"/>
+<rect x="80" y="772" width="1440" height="292" rx="20" fill="url(#core)" stroke="#34d399" stroke-opacity="0.55" stroke-width="1.5"/>
+<text x="112.0" y="823.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">05</text>
+<g transform="translate(180,818)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><circle r="6" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><ellipse rx="11" ry="4" transform="rotate(-30)" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="-8" r="1.8" fill="#34d399"/></g>
+</g>
+<text x="220.0" y="814.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#6ee7b7" text-anchor="start">Nawāt core</text>
+<text x="220.0" y="838.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">The nucleus — 24 modules</text>
+<rect x="112.0" y="868" width="332.0" height="168" rx="14" fill="#08130f" fill-opacity="0.6" stroke="#34d399" stroke-opacity="0.18"/>
+<text x="134.0" y="902.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="start">Storage</text>
+<text x="134.0" y="924.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#86efac" text-anchor="start">Bounded cache, durable store</text>
+<rect x="134.0" y="944" width="50.7" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="144.0" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">keys</text>
+<rect x="192.7" y="944" width="60.0" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="202.7" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">cache</text>
+<rect x="260.6" y="944" width="54.2" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="270.6" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">store</text>
+<rect x="322.8" y="944" width="45.7" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="332.8" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">hub</text>
+<rect x="134.0" y="980" width="64.8" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="144.0" y="999.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">shards</text>
+<rect x="460.0" y="868" width="332.0" height="168" rx="14" fill="#08130f" fill-opacity="0.6" stroke="#34d399" stroke-opacity="0.18"/>
+<text x="482.0" y="902.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="start">Safety</text>
+<text x="482.0" y="924.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#86efac" text-anchor="start">Nothing is lost by accident</text>
+<rect x="482.0" y="944" width="62.7" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="492.0" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">leases</text>
+<rect x="552.7" y="944" width="71.9" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="562.7" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">process</text>
+<rect x="632.6" y="944" width="101.0" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="642.6" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">checkpoints</text>
+<rect x="482.0" y="980" width="37.1" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="492.0" y="999.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">db</text>
+<rect x="527.1" y="980" width="59.7" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="537.1" y="999.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">errors</text>
+<rect x="808.0" y="868" width="332.0" height="168" rx="14" fill="#08130f" fill-opacity="0.6" stroke="#34d399" stroke-opacity="0.18"/>
+<text x="830.0" y="902.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="start">Runs</text>
+<text x="830.0" y="924.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#86efac" text-anchor="start">Every run is reproducible</text>
+<rect x="830.0" y="944" width="79.0" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="840.0" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">executor</text>
+<rect x="917.0" y="944" width="49.7" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="927.0" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">runs</text>
+<rect x="974.8" y="944" width="70.5" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="984.8" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">metrics</text>
+<rect x="830.0" y="980" width="84.9" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="840.0" y="999.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">estimator</text>
+<rect x="922.9" y="980" width="61.3" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="932.9" y="999.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">config</text>
+<rect x="1156.0" y="868" width="332.0" height="168" rx="14" fill="#08130f" fill-opacity="0.6" stroke="#34d399" stroke-opacity="0.18"/>
+<text x="1178.0" y="902.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="start">Serving</text>
+<text x="1178.0" y="924.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#86efac" text-anchor="start">Adapters go live in vLLM</text>
+<rect x="1178.0" y="944" width="77.0" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="1188.0" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">sessions</text>
+<rect x="1263.0" y="944" width="78.8" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="1273.0" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">evaluate</text>
+<rect x="1349.8" y="944" width="62.8" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="1359.8" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">health</text>
+<rect x="1420.5" y="944" width="40.6" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="1430.5" y="963.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">api</text>
+<rect x="1178.0" y="980" width="83.3" height="28" rx="8" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.25"/>
+<text x="1188.0" y="999.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13.5" font-weight="400" fill="#d1fae5" text-anchor="start">notebook</text>
+<rect x="80" y="1078" width="1440" height="92" rx="16" fill="#111723" stroke="#1e2633"/>
+<text x="112.0" y="1129.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">04</text>
+<g transform="translate(180,1124.0)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#38bdf8" fill-opacity="0.12" stroke="#38bdf8" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><circle cx="-8" cy="-6" r="2.5" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-8" cy="6" r="2.5" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="0" r="2.5" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-5.5 -5 L5.5 -1 M-5.5 5 L5.5 1" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="220.0" y="1120.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#f1f5f9" text-anchor="start">ML frameworks</text>
+<text x="220.0" y="1144.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Run as subprocesses, never imported</text>
+<rect x="540.0" y="1107.0" width="85.0" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="554.0" y="1129.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Unsloth</text>
+<rect x="635.0" y="1107.0" width="55.9" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="649.0" y="1129.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">TRL</text>
+<rect x="701.0" y="1107.0" width="125.8" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="715.0" y="1129.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Transformers</text>
+<rect x="836.8" y="1107.0" width="65.3" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="850.8" y="1129.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">LoRA</text>
+<rect x="912.1" y="1107.0" width="66.5" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="926.1" y="1129.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">vLLM</text>
+<rect x="988.6" y="1107.0" width="85.3" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="1002.6" y="1129.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">PyTorch</text>
+<rect x="1083.9" y="1107.0" width="69.8" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="1097.9" y="1129.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Triton</text>
+<rect x="80" y="1184" width="1440" height="92" rx="16" fill="#111723" stroke="#1e2633"/>
+<text x="112.0" y="1235.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">03</text>
+<g transform="translate(180,1230.0)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#60a5fa" fill-opacity="0.12" stroke="#60a5fa" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><path d="M-4 -10 q-4 0 -4 4 v3 q0 3 -3 3 q3 0 3 3 v3 q0 4 4 4 M4 -10 q4 0 4 4 v3 q0 3 3 3 q-3 0 -3 3 v3 q0 4 -4 4" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="220.0" y="1226.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#f1f5f9" text-anchor="start">Python runtime</text>
+<text x="220.0" y="1250.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Locked, reproducible environment</text>
+<rect x="540.0" y="1213.0" width="118.1" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="554.0" y="1235.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Python 3.11</text>
+<rect x="668.1" y="1213.0" width="120.7" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="682.1" y="1235.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">uv + uv.lock</text>
+<rect x="798.9" y="1213.0" width="71.3" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="812.9" y="1235.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">boto3</text>
+<rect x="880.1" y="1213.0" width="157.2" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="894.1" y="1235.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">huggingface_hub</text>
+<rect x="1047.3" y="1213.0" width="77.0" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="1061.3" y="1235.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">SQLite</text>
+<rect x="1134.3" y="1213.0" width="81.9" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="1148.3" y="1235.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">FastAPI</text>
+<rect x="80" y="1290" width="1440" height="92" rx="16" fill="#111723" stroke="#1e2633"/>
+<text x="112.0" y="1341.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">02</text>
+<g transform="translate(180,1336.0)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#fb923c" fill-opacity="0.12" stroke="#fb923c" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-10" y="-10" width="20" height="8" rx="2" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="-10" y="2" width="20" height="8" rx="2" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-6" cy="-6" r="1" fill="#fb923c"/><circle cx="-6" cy="6" r="1" fill="#fb923c"/></g>
+</g>
+<text x="220.0" y="1332.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#f1f5f9" text-anchor="start">System services</text>
+<text x="220.0" y="1356.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">GPU runtime and durable storage</text>
+<rect x="540.0" y="1319.0" width="109.2" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="554.0" y="1341.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">CUDA 12.8</text>
+<rect x="659.2" y="1319.0" width="129.0" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="673.2" y="1341.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">NVIDIA driver</text>
+<rect x="798.2" y="1319.0" width="80.5" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="812.2" y="1341.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Docker</text>
+<rect x="888.8" y="1319.0" width="210.8" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="902.8" y="1341.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">RustFS  ·  S3-compatible</text>
+<rect x="80" y="1396" width="1440" height="92" rx="16" fill="#111723" stroke="#1e2633"/>
+<text x="112.0" y="1447.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">01</text>
+<g transform="translate(180,1442.0)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#facc15" fill-opacity="0.12" stroke="#facc15" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-7" y="-7" width="14" height="14" rx="2" fill="none" stroke="#facc15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-3 -7v-3 M3 -7v-3 M-3 7v3 M3 7v3 M-7 -3h-3 M-7 3h-3 M7 -3h3 M7 3h3" fill="none" stroke="#facc15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="220.0" y="1438.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#f1f5f9" text-anchor="start">Linux kernel</text>
+<text x="220.0" y="1462.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">Leases follow live processes</text>
+<rect x="540.0" y="1425.0" width="95.5" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="554.0" y="1447.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">nvidia.ko</text>
+<rect x="645.5" y="1425.0" width="208.5" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="659.5" y="1447.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">/proc  ·  pid + start time</text>
+<rect x="864.0" y="1425.0" width="82.9" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="878.0" y="1447.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">boot_id</text>
+<rect x="957.0" y="1425.0" width="80.2" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="971.0" y="1447.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">signals</text>
+<rect x="1047.1" y="1425.0" width="93.7" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="1061.1" y="1447.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">file locks</text>
+<rect x="80" y="1502" width="1440" height="92" rx="16" fill="#111723" stroke="#1e2633"/>
+<text x="112.0" y="1553.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="500" fill="#64748b" text-anchor="start">00</text>
+<g transform="translate(180,1548.0)">
+<rect x="-24.0" y="-24.0" width="48" height="48" rx="12" fill="#94a3b8" fill-opacity="0.12" stroke="#94a3b8" stroke-opacity="0.35"/>
+<g transform="scale(1.0)"><rect x="-11" y="-7" width="22" height="14" rx="2" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="-3" r="3.5" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 -3 h2 M5 1 h2 M-8 7 v3 M-4 7 v3 M0 7 v3" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<text x="220.0" y="1544.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#f1f5f9" text-anchor="start">Hardware</text>
+<text x="220.0" y="1568.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14.5" font-weight="400" fill="#94a3b8" text-anchor="start">One GPU workstation</text>
+<rect x="540.0" y="1531.0" width="235.0" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="554.0" y="1553.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">RTX 5060 Ti  ·  16 GB VRAM</text>
+<rect x="785.0" y="1531.0" width="107.0" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="799.0" y="1553.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">NVMe SSD</text>
+<rect x="902.0" y="1531.0" width="113.6" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="916.0" y="1553.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">CPU + RAM</text>
+<rect x="1025.6" y="1531.0" width="90.6" height="34" rx="17.0" fill="#1a2230" stroke="#263041"/>
+<text x="1039.6" y="1553.2" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="400" fill="#cbd5e1" text-anchor="start">Network</text>
+<line x1="46" y1="1584" x2="46" y2="574" stroke="#64748b" stroke-opacity="0.6" stroke-width="1.5" marker-end="url(#ah)"/>
+<text transform="translate(34,1077.0) rotate(-90)" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle" letter-spacing="3">KERNEL  →  NAWĀT</text>
+<text x="80.0" y="1664.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="start" letter-spacing="3">LIFE OF A RUN</text>
+<text x="1520.0" y="1664.0" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#64748b" text-anchor="end">nawat submit train.py --model models/unsloth/Qwen3.5-0.8B --dataset datasets/unsloth/LaTeX_OCR</text>
+<rect x="80" y="1686" width="1440" height="150" rx="20" fill="#111723" stroke="#1e2633"/>
+<line x1="190" y1="1738" x2="1410" y2="1738" stroke="#34d399" stroke-opacity="0.35" stroke-width="2"/>
+<circle cx="190.0" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="190.0" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">1</text>
+<text x="190.0" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Resolve</text>
+<text x="190.0" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">cache → S3 → hub</text>
+<circle cx="364.3" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="364.3" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">2</text>
+<text x="364.3" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Lease</text>
+<text x="364.3" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">pin inputs to the pid</text>
+<circle cx="538.6" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="538.6" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">3</text>
+<text x="538.6" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Train</text>
+<text x="538.6" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">Unsloth subprocess</text>
+<circle cx="712.9" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="712.9" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">4</text>
+<text x="712.9" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Record</text>
+<text x="712.9" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">params, logs, metrics</text>
+<circle cx="887.1" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="887.1" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">5</text>
+<text x="887.1" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Publish</text>
+<text x="887.1" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">upload the adapter</text>
+<circle cx="1061.4" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="1061.4" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">6</text>
+<text x="1061.4" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Verify</text>
+<text x="1061.4" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">confirm in the store</text>
+<circle cx="1235.7" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="1235.7" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">7</text>
+<text x="1235.7" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Reclaim</text>
+<text x="1235.7" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">free the local copy</text>
+<circle cx="1410.0" cy="1738" r="15" fill="#0a0e17" stroke="#34d399" stroke-width="2"/>
+<text x="1410.0" y="1743.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="700" fill="#6ee7b7" text-anchor="middle">8</text>
+<text x="1410.0" y="1788.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="700" fill="#f1f5f9" text-anchor="middle">Serve</text>
+<text x="1410.0" y="1810.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="middle">hot-load into vLLM</text>
+<text x="800.0" y="1896.0" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#64748b" text-anchor="middle">Nawāt means “nucleus” in Arabic — the small core that coordinates the research workflow.</text>
+</svg>

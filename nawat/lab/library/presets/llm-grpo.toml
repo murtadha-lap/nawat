@@ -1,0 +1,30 @@
+# Unsloth nb/Qwen3_(4B)-GRPO.ipynb — format priming on OpenMathReasoning-mini, then GRPO on
+# DAPO-Math-17k with the notebook's four rewards. One difference: loss_type is set to "grpo"
+# explicitly; the notebook leaves TRL 0.22's default, which is "dapo" (see llm-dapo).
+# fast_inference is off because vLLM is not in the training environment here; turn it on
+# (model.fast_inference=true) once it is, as the notebook does.
+[preset]
+backbone    = "grpo"
+description = "GRPO with format priming and four rewards (Qwen3 GRPO notebook)"
+model       = "models/unsloth/Qwen3-4B-Base"
+datasets    = ["datasets/open-r1/DAPO-Math-17k-Processed", "datasets/unsloth/OpenMathReasoning-mini"]
+
+[blocks]
+model    = "llm-lora"
+dataset  = "grpo-prompts"
+template = "reasoning-tags"
+rewards  = ["format-exact", "format-approx", "answer-match", "number-match"]
+eval     = ["gsm8k"]
+export   = ["adapter"]
+
+[params.backbone]
+loss_type    = "grpo"
+prime_epochs = 2.0
+
+[params.model]
+r          = 32
+lora_alpha = 64
+
+[params.dataset]
+subset = "en"
+prime  = true

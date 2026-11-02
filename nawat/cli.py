@@ -14,23 +14,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import select
-import shlex
 import subprocess
 import sys
 import threading
 import time
-import uuid
-from dataclasses import replace
 from pathlib import Path
 
 from . import checkpoints
 from .cache import Cache, open_cache
-from .checkpoints import CheckpointPolicy
 from .config import UNSET, Config
 from .errors import NawatError
-from .keys import KINDS, Key
-from .runs import RunSpec, RunState, RunStore, validate_run_name
+from .keys import KINDS, Key, require_not_experiment_output
+from .runs import RunState, RunStore
 from .units import bar, human_age, human_bytes, parse_size
 
 PROGRAM = "nawat"
@@ -233,6 +228,7 @@ def cmd_rm(cache: Cache, args) -> int:
 
 
 def cmd_publish(cache: Cache, args) -> int:
+    require_not_experiment_output(args.key)
     result = cache.publish(
         args.directory,
         args.key,
@@ -248,6 +244,7 @@ def cmd_publish(cache: Cache, args) -> int:
 
 
 def cmd_add(cache: Cache, args) -> int:
+    require_not_experiment_output(args.key)
     status = cache.add(args.directory, args.key, publish=not args.no_publish)
     where = "cached and published" if not args.no_publish else "cached only, not yet in object storage"
     print(f"{status.key}: {status.files} files, {human_bytes(status.bytes)} — {where}.")
@@ -283,70 +280,6 @@ def cmd_leases(cache: Cache, args) -> int:
     return 0
 
 
-def cmd_hold(cache: Cache, args) -> int:
-    """Stage inputs, run a command against them, publish its outputs.
-
-    This is the Phase 1 shape of a run: everything the executor will later do
-    from the API, driven from the shell with no manual file management.
-    """
-    if not args.command:
-        _err(f"Nothing to run. Put the command after --, e.g. {PROGRAM} hold --model models/x -- python train.py")
-        return 2
-
-    run_id = args.run_id or f"{time.strftime('%Y-%m-%d')}-{uuid.uuid4().hex[:4]}"
-    inputs: list[Key] = [Key.parse(k) for k in (*args.model, *args.dataset, *args.input)]
-    holder = f"{PROGRAM} hold {run_id}"
-
-    env = dict(os.environ)
-    env["NAWAT_RUN_ID"] = run_id
-    progress = _progress_reporter()
-
-    with cache.holding(*inputs, holder=holder, progress=progress) as staged:
-        env["NAWAT_INPUTS"] = json.dumps({key: str(path) for key, path in staged.items()})
-        if args.model:
-            env["NAWAT_MODEL_DIR"] = str(staged[str(Key.parse(args.model[0]))])
-        if args.dataset:
-            env["NAWAT_DATASET_DIR"] = str(staged[str(Key.parse(args.dataset[0]))])
-            env["NAWAT_DATASET_DIRS"] = json.dumps(
-                [str(staged[str(Key.parse(k))]) for k in args.dataset]
-            )
-
-        out_key = Key.parse(args.out) if args.out else None
-        if out_key is not None:
-            out_dir = cache.local_path(out_key)
-        elif os.environ.get("NAWAT_OUT_DIR"):
-            out_dir = Path(os.environ["NAWAT_OUT_DIR"])
-        else:
-            out_dir = None
-        if out_dir is not None:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            env["NAWAT_OUT_DIR"] = str(out_dir)
-
-        _err(f"run {run_id}  staged {len(staged)} input(s)")
-        for key, path in staged.items():
-            _err(f"  {key} -> {path}")
-        if out_dir is not None:
-            _err(f"  outputs -> {out_dir}")
-        _err(f"$ {' '.join(shlex.quote(part) for part in args.command)}")
-
-        started = time.monotonic()
-        completed = subprocess.run(args.command, env=env)
-        elapsed = time.monotonic() - started
-        _err(f"run {run_id} exited {completed.returncode} after {human_age(elapsed)}")
-
-        if completed.returncode != 0:
-            _err("Outputs were not published because the command failed. They are still on disk"
-                 + (f" at {out_dir}." if out_dir else "."))
-            return completed.returncode
-
-    if out_key is not None and out_dir is not None and any(out_dir.iterdir()):
-        result = cache.publish(out_dir, out_key, keep_local=args.keep_outputs, progress=progress)
-        print(f"Published {result.key}: {human_bytes(result.bytes)}, verified.")
-    elif out_key is not None:
-        _err(f"The command wrote nothing to {out_dir}; nothing was published.")
-    return 0
-
-
 # -- runs ---------------------------------------------------------------------
 
 
@@ -358,105 +291,6 @@ def _executor(cache: Cache, ask_name=None):
     from .executor import Executor
 
     return Executor(cache, _run_store(cache), ask_name=ask_name)
-
-
-#: How long the end-of-run name prompt waits before publishing under the run id.
-#: A run that finishes at four in the morning must not sit there holding its
-#: artifacts hostage until someone comes back to the terminal.
-NAME_TIMEOUT = 300.0
-
-
-def _ask_name(record) -> str | None:
-    """Ask what to call the run, once it is over and before anything is uploaded.
-
-    Only on a terminal, and only for as long as someone is plausibly watching.
-    """
-    if not (sys.stdin.isatty() and sys.stderr.isatty()):
-        return None
-    outcome = "finished" if record.exit_code == 0 else f"exited {record.exit_code}"
-    _err(f"\nrun {record.id} {outcome}.")
-    _err("Name it for object storage — artifacts publish under runs/<name>/.")
-    # One deadline for the whole exchange, retries included: the artifacts of a
-    # finished run are not held up for longer than someone might be away from
-    # the terminal, however many times the name comes back unusable.
-    deadline = time.monotonic() + NAME_TIMEOUT
-    while True:
-        _err(f"name [{record.id}]: ")
-        remaining = deadline - time.monotonic()
-        if remaining <= 0 or not select.select([sys.stdin], [], [], remaining)[0]:
-            _err(f"\nNo answer in {human_age(NAME_TIMEOUT)}; publishing under runs/{record.id}/.")
-            return None
-        answer = sys.stdin.readline().strip()
-        if not answer:
-            return None
-        try:
-            return validate_run_name(answer)
-        except NawatError as exc:
-            _err(f"{exc.cause} {exc.remedy or ''}".strip())
-
-
-def _parse_params(pairs: list[str]) -> dict[str, str]:
-    params: dict[str, str] = {}
-    for pair in pairs:
-        if "=" not in pair:
-            raise NawatError(f"{pair!r} is not a parameter.", "Write parameters as name=value.")
-        name, value = pair.split("=", 1)
-        params[name.strip()] = value.strip()
-    return params
-
-
-def cmd_submit(cache: Cache, args) -> int:
-    executor = _executor(cache, ask_name=None if args.name or args.no_name else _ask_name)
-    spec = RunSpec(
-        script=args.script,
-        model=Key.parse(args.model) if args.model else None,
-        datasets=tuple(Key.parse(k) for k in args.dataset),
-        inputs=tuple(Key.parse(k) for k in args.input),
-        params=_parse_params(args.param),
-        notes=args.notes or "",
-        checkpoints=CheckpointPolicy(
-            lineage=args.checkpoint_lineage or "",
-            resume=not args.fresh,
-            keep=args.keep_checkpoints,
-            publish=not args.no_publish_checkpoints,
-        ),
-    )
-    executor.validate(spec)
-    record = executor.runs.create(spec, args.run_id, name=args.name)
-    return _launch(executor, record, queue=args.queue)
-
-
-def cmd_resume(cache: Cache, args) -> int:
-    """Submit the same run again, so it continues from its last checkpoint."""
-    executor = _executor(cache, ask_name=None if args.name else _ask_name)
-    previous = executor.runs.get(args.run_id)
-    lineage = previous.spec.checkpoint_lineage
-    directory = checkpoints.lineage_dir(cache.config, lineage)
-    newest = checkpoints.latest(directory)
-
-    if newest is None:
-        _err(f"Lineage {lineage} holds no checkpoint, so there is nothing to continue from.")
-        _err(f"Inspect it with: {PROGRAM} checkpoints {lineage}")
-        if not args.force:
-            return 3
-        _err("Continuing anyway (--force); this starts from step 0.")
-    else:
-        _err(f"run {previous.id} reached {newest.describe()}")
-
-    # The lineage is pinned rather than re-derived, so the new run continues
-    # this one even if it was submitted with an explicit lineage of its own.
-    spec = replace(
-        previous.spec,
-        params={**previous.spec.params, **_parse_params(args.param)},
-        notes=args.notes if args.notes is not None else f"resumes {previous.id}",
-        checkpoints=replace(previous.spec.checkpoints, lineage=lineage, resume=True),
-    )
-    executor.validate(spec)
-    # The name carries over by default: a resumed run is the same experiment,
-    # so its artifacts belong in the folder the first attempt was filed under.
-    record = executor.runs.create(spec, args.run_id_new, name=args.name or previous.name)
-    _err(f"resuming as run {record.id}")
-    return _launch(executor, record, queue=args.queue)
 
 
 def _launch(executor, record, *, queue: bool) -> int:
@@ -692,26 +526,6 @@ def cmd_metrics(cache: Cache, args) -> int:
     return 0
 
 
-def cmd_scripts(cache: Cache, args) -> int:
-    root = cache.config.workspace_root
-    if not root.is_dir():
-        print(f"The workspace {root} does not exist yet.")
-        print("Create it and put a training script there, or set NAWAT_WORKSPACE.")
-        return 0
-    found = sorted(
-        path
-        for path in root.rglob("*")
-        if path.suffix in (".py", ".ipynb")
-        and not any(part.startswith((".", "__")) for part in path.relative_to(root).parts)
-    )
-    if not found:
-        print(f"No scripts or notebooks under {root}.")
-        return 0
-    rows = [[str(p.relative_to(root)), "notebook" if p.suffix == ".ipynb" else "script"] for p in found]
-    _table(["script", "kind"], rows)
-    return 0
-
-
 # -- serving ------------------------------------------------------------------
 
 
@@ -804,33 +618,6 @@ def cmd_estimate(cache: Cache, args) -> int:
     print()
     print(result.verdict())
     return 0 if result.fits is not False else 1
-
-
-def cmd_eval(cache: Cache, args) -> int:
-    """Evaluate a run's adapter against a held-out set, into its record."""
-    from .evaluate import Evaluator
-
-    evaluator = Evaluator(cache, _run_store(cache), _sessions(cache))
-    _err(f"Evaluating run {args.run_id} — the base model is served if it is not already.")
-
-    def report(done: int, total: int) -> None:
-        if sys.stderr.isatty():
-            _err(f"\r  sample {done}/{total}   ") if done < total else _err(f"\r  sample {done}/{total}")
-
-    result = evaluator.evaluate_run(
-        args.run_id,
-        args.data,
-        base=args.base,
-        file_name=args.file,
-        limit=args.limit,
-        label=args.label,
-        progress=report,
-    )
-    print(f"run {args.run_id} · {result.samples} samples against {Path(args.data).name}")
-    print(f"CER  {result.cer * 100:.2f}%")
-    print(f"WER  {result.wer * 100:.2f}%")
-    print(f"Written into the run record; compare with: {PROGRAM} metrics {args.run_id}")
-    return 0
 
 
 def cmd_lab(cache: Cache, args) -> int:
@@ -993,48 +780,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reap", action="store_true", help="clear leases whose holder is gone")
     p.set_defaults(run=cmd_leases)
 
-    p = sub.add_parser("hold", help="stage inputs, run a command against them, publish its outputs")
-    p.add_argument("--model", action="append", default=[], metavar="KEY")
-    p.add_argument("--dataset", action="append", default=[], metavar="KEY")
-    p.add_argument("--input", action="append", default=[], metavar="KEY", help="any other artifact to stage")
-    p.add_argument("--out", metavar="KEY", help="publish the command's output directory under this key")
-    p.add_argument("--run-id", help="identify this run; generated if omitted")
-    p.add_argument("--keep-outputs", action="store_true", help="keep outputs on disk after publishing")
-    p.add_argument("command", nargs=argparse.REMAINDER, help="-- followed by the command to run")
-    p.set_defaults(run=cmd_hold)
-
-    p = sub.add_parser("submit", help="run a training script: stage, execute, publish")
-    p.add_argument("script", help="a .py or .ipynb inside the workspace")
-    p.add_argument("--model", metavar="KEY")
-    p.add_argument("--dataset", action="append", default=[], metavar="KEY")
-    p.add_argument("--input", action="append", default=[], metavar="KEY")
-    p.add_argument("--param", action="append", default=[], metavar="NAME=VALUE")
-    p.add_argument("--notes", help="why this run exists")
-    p.add_argument("--name", metavar="NAME",
-                   help="what to call this run in object storage; asked for at the end if omitted")
-    p.add_argument("--no-name", action="store_true", help="do not ask for a name at the end; publish under the run id")
-    p.add_argument("--run-id", help="identify this run; generated if omitted")
-    p.add_argument("--queue", action="store_true", help="enqueue for the control plane instead of running here")
-    p.add_argument("--checkpoint-lineage", metavar="NAME",
-                   help="checkpoint directory to train into; derived from the script and inputs if omitted")
-    p.add_argument("--fresh", action="store_true",
-                   help="ignore and delete this lineage's checkpoints, starting from step 0")
-    p.add_argument("--keep-checkpoints", action="store_true",
-                   help="keep the checkpoints on local disk even after the run succeeds")
-    p.add_argument("--no-publish-checkpoints", action="store_true",
-                   help="do not replicate the last checkpoint to object storage")
-    p.set_defaults(run=cmd_submit)
-
-    p = sub.add_parser("resume", help="run a failed run again, continuing from its last checkpoint")
-    p.add_argument("run_id", help="the run to continue")
-    p.add_argument("--param", action="append", default=[], metavar="NAME=VALUE", help="change a parameter")
-    p.add_argument("--notes")
-    p.add_argument("--name", metavar="NAME", help="publish under this name; the previous run's by default")
-    p.add_argument("--run-id", dest="run_id_new", help="identify the new run; generated if omitted")
-    p.add_argument("--queue", action="store_true", help="enqueue for the control plane instead of running here")
-    p.add_argument("--force", action="store_true", help="submit even if there is no checkpoint to continue from")
-    p.set_defaults(run=cmd_resume)
-
     p = sub.add_parser("checkpoints", help="what can be resumed, and what it costs in disk")
     p.add_argument("lineage", nargs="?", help="one lineage, in detail")
     p.add_argument("--prune", action="store_true", help="keep only the newest checkpoints of each lineage")
@@ -1043,35 +788,32 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_checkpoints)
 
-    p = sub.add_parser("runs", help="run history")
+    p = sub.add_parser("runs", help="run history — the layer under experiments")
     p.add_argument("--state", choices=[s.value for s in RunState])
     p.add_argument("--limit", type=int, default=50)
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_runs)
 
-    p = sub.add_parser("run", help="everything recorded about one run")
+    p = sub.add_parser("run", help="one run of an experiment, in detail")
     p.add_argument("run_id")
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_run)
 
-    p = sub.add_parser("logs", help="a run's log")
+    p = sub.add_parser("logs", help="a run's log (or: nawat exp logs <experiment>)")
     p.add_argument("run_id")
     p.add_argument("-f", "--follow", action="store_true", help="stream until the run ends")
     p.add_argument("--tail", type=int, help="only the last N lines")
     p.set_defaults(run=cmd_logs)
 
-    p = sub.add_parser("cancel", help="stop a run and release what it holds")
+    p = sub.add_parser("cancel", help="stop a run and release what it holds (or: nawat exp cancel)")
     p.add_argument("run_id")
     p.set_defaults(run=cmd_cancel)
 
-    p = sub.add_parser("metrics", help="a run's metric series — the trace, in the terminal")
+    p = sub.add_parser("metrics", help="a run's metric series (or: nawat exp metrics <experiment>)")
     p.add_argument("run_id")
     p.add_argument("-f", "--follow", action="store_true", help="stream points as they are written")
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_metrics)
-
-    p = sub.add_parser("scripts", help="training scripts and notebooks in the workspace")
-    p.set_defaults(run=cmd_scripts)
 
     p = sub.add_parser("serve", help="start an inference server for a model")
     p.add_argument("key")
@@ -1103,19 +845,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_estimate)
 
-    p = sub.add_parser("eval", help="score a run's adapter against a held-out set (CER/WER)")
-    p.add_argument("run_id")
-    p.add_argument("--data", required=True, help="a dataset key or a local path holding the eval JSONL")
-    p.add_argument("--file", help="file name inside the dataset (default: eval/test/val.jsonl)")
-    p.add_argument("--base", metavar="KEY", help="base model to serve; defaults to the run's model")
-    p.add_argument("--limit", type=int, help="score only the first N samples")
-    p.add_argument("--label", help="name for this evaluation in the record")
-    p.set_defaults(run=cmd_eval)
-
     p = sub.add_parser("api", help="run the control plane over HTTP")
     p.set_defaults(run=cmd_api)
 
-    p = sub.add_parser("lab", help="JupyterLab in the workspace, sharing the cache")
+    p = sub.add_parser("jupyter", help="JupyterLab in the workspace, to look at data and results")
     p.add_argument("--port", type=int)
     p.set_defaults(run=cmd_lab)
 
@@ -1125,6 +858,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--shard-size", default="512MB")
     p.add_argument("--no-publish", action="store_true", help="write the shards beside the source instead")
     p.set_defaults(run=cmd_shard)
+
+    from .lab.cli import register as register_lab
+
+    register_lab(sub)
 
     p = sub.add_parser("config", help="the configuration in force, with credentials redacted")
     p.set_defaults(run=cmd_config)
@@ -1154,8 +891,6 @@ def _config_from(args) -> Config:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if getattr(args, "run", None) is cmd_hold and args.command and args.command[0] == "--":
-        args.command = args.command[1:]  # argparse.REMAINDER keeps the leading --
     try:
         cache = open_cache(_config_from(args))
         return args.run(cache, args)
