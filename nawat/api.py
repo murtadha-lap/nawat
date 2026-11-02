@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hmac
 import json
 import os
-import time
 from typing import Any, AsyncIterator, Iterator
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -27,9 +27,10 @@ from .cache import Cache, open_cache
 from .config import Config
 from . import checkpoints as checkpoint_store
 from .errors import NawatError
-from .executor import Executor, RunQueue, process_alive
+from .executor import Executor, RunQueue
+from .gpu import gpu_info
 from .health import run_checks
-from .keys import KINDS
+from .process import process_alive
 from .runs import RunState, RunStore, rebuild_from_disk
 from .sessions import ServingBackend, SessionManager
 from .units import human_bytes
@@ -130,14 +131,18 @@ def create_app(
 
     # -- authentication ----------------------------------------------------
 
-    def authorise(request: Request) -> None:
-        """A token is required when one is configured (NFR-4.2)."""
+    def authorised(request: Request) -> bool:
+        """Whether the request carries the configured token — always, when none is configured."""
         expected = platform.config.api_token
         if not expected:
-            return
+            return True
         header = request.headers.get("authorization", "")
         supplied = header[7:] if header.lower().startswith("bearer ") else request.headers.get("x-nawat-token", "")
-        if supplied != expected:
+        return hmac.compare_digest(supplied.encode(), expected.encode())
+
+    def authorise(request: Request) -> None:
+        """A token is required when one is configured (NFR-4.2)."""
+        if not authorised(request):
             raise HTTPException(status_code=401, detail="A valid token is required. Set NAWAT_API_TOKEN and send it as a bearer token.")
 
     guard = [Depends(authorise)]
@@ -159,7 +164,10 @@ def create_app(
     # -- platform ----------------------------------------------------------
 
     @app.get("/health")
-    def health() -> dict[str, Any]:
+    def health(request: Request) -> dict[str, Any]:
+        """Liveness for anyone; the details — which run, which model, which paths — only with the token."""
+        if not authorised(request):
+            return {"status": "ok", "version": __version__}
         session = platform.sessions.current()
         active = platform.runs.active()
         status = platform.cache.status()
@@ -496,37 +504,6 @@ def create_app(
         }
 
     return app
-
-
-_GPU_CACHE: dict[str, Any] = {"at": 0.0, "value": None}
-
-
-def gpu_info() -> dict[str, Any] | None:
-    """One reading from nvidia-smi, cached briefly. None when there is no GPU."""
-    import subprocess
-
-    now = time.time()
-    if now - _GPU_CACHE["at"] < 2.0:
-        return _GPU_CACHE["value"]
-    value = None
-    try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,utilization.gpu",
-             "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=3,
-        )
-        if out.returncode == 0 and out.stdout.strip():
-            name, used, total, util = [part.strip() for part in out.stdout.strip().splitlines()[0].split(",")]
-            value = {
-                "name": name,
-                "memory_used": int(used) * 2**20,
-                "memory_total": int(total) * 2**20,
-                "utilization": int(util),
-            }
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        value = None
-    _GPU_CACHE.update(at=now, value=value)
-    return value
 
 
 def storage_warnings(status) -> list[str]:

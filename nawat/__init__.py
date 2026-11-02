@@ -1,42 +1,28 @@
 """Nawāt — storage and orchestration core for a storage-constrained GPU host.
 
-Inside a notebook or a training script the whole cache is one import (FR-3.2)::
+Inside a notebook or a block the whole cache is one import (FR-3.2)::
 
     import nawat
 
-    model = nawat.resolve("models/unsloth/Qwen2.5-VL-7B-Instruct")
-    data  = nawat.resolve("datasets/ocr-arabic-v3")
-    ...
-    nawat.publish(out_dir, "runs/2026-07-28-a91f/adapter")
+    model = nawat.resolve("models/unsloth/Qwen3.5-0.8B")   # local cache → object storage → hub, once
+    data  = nawat.resolve("datasets/unsloth/LaTeX_OCR")
+    nawat.publish("./prepared", "datasets/my-lab/latex-ocr-v1")
 
-Both leases and the cache ceiling are handled underneath; the script never
-names a byte count or deletes a file.
+Leases and the cache ceiling are handled underneath; nothing here names a byte
+count or deletes a file by hand.
 
-For a notebook that should also leave a run record — the provenance a submitted
-script gets for free — open a run instead, and the staging, leasing, metric
-series and verified publish happen around your cells::
+Training is recorded only as experiments — a fixed backbone, declared
+parameters, a person's approval — planned and run from the CLI::
 
-    run = nawat.begin_run(
-        model   = "models/unsloth/Qwen3.5-0.8B",
-        dataset = "datasets/unsloth/LaTeX_OCR",
-        params  = {"max_steps": 30},
-    )
-    model, tokenizer = FastVisionModel.from_pretrained(run.model_dir)
-    ...
-    model.save_pretrained(run.artifact_dir("adapter"))
-    run.finish()
+    nawat exp plan vlm-sft --set train.max_steps=30
+    nawat exp approve vlm-sft/<name>
+    nawat exp run vlm-sft/<name>
 
-See :mod:`nawat.notebook`.
-
-A run that fails is not a run that is lost. Checkpoints go to a durable
-directory of their own, are kept when anything but success ends the run, and are
-handed back to the next run of the same script and inputs::
-
-    args = SFTConfig(**nawat.checkpoint_args(save_steps=250), ...)
-    trainer.train(resume_from_checkpoint=nawat.resume_from())
-
-Two lines, and a crash at hour 60 costs the last few minutes rather than the
-whole run. See :mod:`nawat.checkpoints`.
+A run that fails is not a run that is lost: every backbone writes checkpoints
+to a durable lineage, and running the experiment again continues from the last
+one (see :mod:`nawat.checkpoints`). Results are read back with ``nawat exp
+report`` or, from a notebook, :func:`history`, :func:`run_record` and
+:func:`trace` (see :mod:`nawat.notebook`).
 """
 
 from __future__ import annotations
@@ -61,12 +47,10 @@ from .errors import (
 )
 from .keys import KINDS, Key
 from .notebook import (
-    Run,
     artifact_dir,
     begin_run,
     checkpoint_args,
     checkpoint_dir,
-    current_run,
     dataset_dir,
     history,
     model_dir,
@@ -164,7 +148,6 @@ __all__ = [
     "Offline",
     "Protected",
     "PublishResult",
-    "Run",
     "StoreUnavailable",
     "VerificationFailed",
     "VerificationResult",
@@ -175,7 +158,6 @@ __all__ = [
     "checkpoint_args",
     "checkpoint_dir",
     "checkpoints",
-    "current_run",
     "dataset_dir",
     "default_cache",
     "free_space",

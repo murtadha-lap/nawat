@@ -230,16 +230,20 @@ def environment_snapshot() -> dict[str, Any]:
             snap["capability"] = list(torch.cuda.get_device_capability(0))
     except Exception:  # noqa: BLE001
         pass
-    try:
-        freeze = subprocess.run([sys.executable, "-m", "pip", "freeze"], capture_output=True, text=True, timeout=60)
-        if freeze.returncode == 0:
-            snap["pip_freeze"] = freeze.stdout.splitlines()
-    except (OSError, subprocess.SubprocessError):
-        pass
+    # Every installed distribution, read from the environment itself: a uv venv
+    # has no pip, so `pip freeze` would silently record nothing.
+    installed: set[str] = set()
+    for dist in metadata.distributions():
+        name = dist.metadata["Name"] if dist.metadata else None
+        if name:
+            installed.add(f"{name}=={dist.version}")
+    snap["installed"] = sorted(installed, key=str.lower)
     return snap
 
 
 def main(run_py: str) -> None:
+    # The frozen code/ folder is what was planned, byte for byte: no .pyc caches beside it.
+    sys.dont_write_bytecode = True
     experiment = Experiment.load(Path(run_py).resolve().parent)
     from ..config import Config
 

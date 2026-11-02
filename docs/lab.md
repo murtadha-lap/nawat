@@ -148,13 +148,19 @@ code.
 - Approval refuses when there is no terminal, and always inside the sandbox.
 - Approvals are signed with a key kept in Nawāt's state directory
   (`approval.key`), outside the workspace and never mounted into the sandbox. An
-  `approval.json` written by anything else is refused at run time and shows as
-  `forged` in the report.
+  `approval.json` written by anything else is refused at run time on the host
+  and shows as `forged` in every report read there.
+- The sandbox has no key, so it cannot check a signature. It refuses to start
+  an experiment whose approval it cannot verify; a run in the sandbox is started
+  from the host with `nawat exp run`, which verifies the signature and then
+  launches the run inside the container.
 
-This stops an agent from approving its own plan in the normal course of work,
-and makes any forgery inside the sandbox visible. It is not a security boundary
-against a program running as your own user on the host, which could read the
-key the same way `nawat` does.
+This stops an agent from approving or starting its own plan in the normal course
+of work, and makes any forgery visible on the host. It is not a security
+boundary: an agent with root inside the sandbox could bypass the refusal there,
+and a program running as your own user on the host could read the key the same
+way `nawat` does. What neither can do is make a hand-written approval look
+verified on the host.
 
 ## Everything an experiment produced, in one place
 
@@ -280,7 +286,9 @@ trains models:
 - its own cache, plus the object-store credentials, so what it trains is
   published to the same bucket.
 
-It cannot approve experiments or delete from object storage.
+It cannot approve experiments, cannot start one on its own (the host checks the
+approval, then launches the run inside it), and cannot delete from object
+storage.
 
 ```bash
 nawat sandbox build          # once: CUDA 12.8 image + training stack + Nawāt + OpenCode
@@ -293,10 +301,13 @@ nawat sandbox down
 It needs Docker and the NVIDIA Container Toolkit on the host.
 
 It is optional, like every block. An experiment runs inside it only when its
-runtime block is `sandbox`:
+runtime block is `sandbox`; approving and starting it stay on the host:
 
 ```bash
-nawat exp plan llm-grpo --use runtime=sandbox
+nawat exp plan llm-grpo --use runtime=sandbox     # here, or by the agent inside
+nawat exp approve llm-grpo/<name>                 # on the host
+nawat exp run llm-grpo/<name>                     # on the host: checks the approval, runs it in the sandbox
+nawat exp logs llm-grpo/<name> -f                 # from either side
 ```
 
 `nawat sandbox agents` prints the rules the agent is given. They are useful for a

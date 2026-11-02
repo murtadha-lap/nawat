@@ -75,7 +75,7 @@ def publish(cache, experiment: Experiment, log: Callable[[str], None] = print) -
     staging_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=str(staging_root)) as scratch:
         copy = Path(scratch) / "experiment"
-        shutil.copytree(experiment.dir, copy, ignore=shutil.ignore_patterns(TRACES_CLASS))
+        shutil.copytree(experiment.dir, copy, ignore=shutil.ignore_patterns(TRACES_CLASS, "__pycache__"))
         key = Key.parse(f"{prefix}/{EXPERIMENT_CLASS}")
         store.delete_prefix(key)
         store.publish(copy, key)

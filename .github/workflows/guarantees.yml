@@ -17,7 +17,7 @@ jobs:
           python-version: "3.12"
       - name: Install (locked)
         run: uv sync --locked --extra api
-      - name: Lint the lab
-        run: uv run pyflakes nawat/lab tests
+      - name: Lint
+        run: uv run pyflakes nawat tests
       - name: Guarantee tests
         run: uv run pytest -q
