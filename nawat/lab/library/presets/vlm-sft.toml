@@ -1,0 +1,22 @@
+# Unsloth nb/Qwen3_5_(0_8B)_Vision.ipynb — LaTeX OCR, the same experiment as examples/.
+[preset]
+backbone    = "sft"
+description = "Vision SFT: image → LaTeX (Qwen3.5 vision notebook)"
+model       = "models/unsloth/Qwen3.5-0.8B"
+dataset     = "datasets/unsloth/LaTeX_OCR"
+
+[blocks]
+model   = "vlm-lora"
+dataset = "vision-instruct"
+eval    = ["heldout-generate"]
+export  = ["adapter"]
+
+[params.backbone]
+sample_every = 10
+
+[params.dataset]
+eval_size = 100
+
+[params."eval.heldout-generate"]
+metric    = "cer"
+max_items = 100

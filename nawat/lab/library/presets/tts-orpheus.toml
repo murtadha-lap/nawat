@@ -1,0 +1,11 @@
+# Unsloth nb/Orpheus_(3B)-TTS.ipynb — Orpheus on the kaira speech dataset, SNAC codes.
+[preset]
+backbone    = "tts"
+description = "Text-to-speech: Orpheus 3B on SNAC codec tokens (Orpheus notebook)"
+model       = "models/unsloth/orpheus-3b-0.1-ft"
+dataset     = "datasets/Etherll/kaira"
+
+[blocks]
+model   = "tts-orpheus"
+dataset = "tts-snac"
+export  = ["adapter"]

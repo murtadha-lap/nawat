@@ -1,0 +1,17 @@
+# Unsloth nb/Whisper.ipynb — Whisper large-v3, LoRA on q/v, 6 % held out for WER.
+[preset]
+backbone    = "stt"
+description = "Speech-to-text: Whisper large-v3 (Whisper notebook)"
+model       = "models/unsloth/whisper-large-v3"
+dataset     = "datasets/Etherll/kaira"
+
+[blocks]
+model   = "stt-whisper"
+dataset = "speech-transcripts"
+eval    = ["heldout-generate"]
+export  = ["adapter"]
+
+[params."eval.heldout-generate"]
+metric         = "wer"
+max_items      = 100
+max_new_tokens = 225

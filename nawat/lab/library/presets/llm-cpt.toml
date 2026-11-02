@@ -1,0 +1,22 @@
+# Unsloth nb/Mistral_v0.3_(7B)-CPT.ipynb — continued pretraining with embed_tokens + lm_head.
+# No default dataset: the notebook's Wikipedia snapshot is ~100 GB. Give one with --dataset.
+[preset]
+backbone    = "cpt"
+description = "Continued pretraining on raw text (Mistral CPT notebook)"
+model       = "models/unsloth/mistral-7b-v0.3"
+
+[blocks]
+model   = "llm-lora"
+dataset = "text-corpus"
+eval    = ["heldout-loss"]
+export  = ["adapter"]
+
+[params.model]
+load_in_4bit   = true
+r              = 128
+lora_alpha     = 32
+use_rslora     = true
+target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj", "embed_tokens", "lm_head"]
+
+[params.dataset]
+eval_size = 0.01

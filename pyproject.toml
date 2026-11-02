@@ -31,7 +31,10 @@ notebook = ["huggingface_hub>=0.23", "matplotlib>=3.8"]
 nawat = "nawat.cli:main"
 
 [dependency-groups]
-dev = ["pyflakes>=3.2"]
+dev = [
+    "pyflakes>=3.2",
+    "pytest>=8",
+]
 
 [tool.uv]
 required-version = ">=0.5"
@@ -59,3 +62,6 @@ packages = ["nawat"]
 # The logo and the social preview are 2.5 MB of images that render from the
 # repository and from nowhere else — a source distribution is not a web page.
 exclude = [".github", "docs", "unsloth_compiled_cache"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

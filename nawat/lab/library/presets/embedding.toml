@@ -1,0 +1,15 @@
+# Unsloth nb/Qwen3_Embedding_(0_6B).ipynb — contrastive LoRA on technical definitions.
+[preset]
+backbone    = "embedding"
+description = "Embeddings: Qwen3-Embedding 0.6B, MultipleNegativesRankingLoss (Qwen3-Embedding notebook)"
+model       = "models/unsloth/Qwen3-Embedding-0.6B"
+dataset     = "datasets/electroglyph/technical"
+
+[blocks]
+model   = "embedding-lora"
+dataset = "embedding-pairs"
+eval    = ["embedding-retrieval"]
+export  = ["adapter"]
+
+[params.dataset]
+eval_size = 500

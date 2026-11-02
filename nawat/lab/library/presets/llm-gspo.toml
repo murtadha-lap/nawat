@@ -1,0 +1,29 @@
+# GSPO = sequence-level importance sampling (as the Unsloth vision GRPO notebook uses),
+# here with the text setup of llm-grpo.
+[preset]
+backbone    = "grpo"
+description = "GSPO: sequence-level importance ratios, Dr. GRPO loss (vision GRPO notebook settings)"
+parent      = "llm-grpo"
+model       = "models/unsloth/Qwen3-4B-Base"
+datasets    = ["datasets/open-r1/DAPO-Math-17k-Processed", "datasets/unsloth/OpenMathReasoning-mini"]
+
+[blocks]
+model    = "llm-lora"
+dataset  = "grpo-prompts"
+template = "reasoning-tags"
+rewards  = ["format-exact", "format-approx", "answer-match", "number-match"]
+eval     = ["gsm8k"]
+export   = ["adapter"]
+
+[params.backbone]
+loss_type                 = "dr_grpo"
+importance_sampling_level = "sequence"
+prime_epochs              = 2.0
+
+[params.model]
+r          = 32
+lora_alpha = 64
+
+[params.dataset]
+subset = "en"
+prime  = true

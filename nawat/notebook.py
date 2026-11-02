@@ -40,13 +40,12 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable
 
 from . import checkpoints as checkpoint_store
 from . import metrics
 from .cache import Cache
-from .checkpoints import CheckpointPolicy
-from .errors import InvalidKey, NawatError, NotFound, Protected
+from .errors import InvalidKey, NotFound, Protected
 from .executor import param_env_name, publish_outputs, publish_record, run_output_dir
 from .hub import OFFLINE_VARS
 from .keys import Key
@@ -487,95 +486,20 @@ class Run:
 # -- starting one -------------------------------------------------------------
 
 
-def begin_run(
-    *,
-    model: str | Key | None = None,
-    dataset: str | Key | None = None,
-    datasets: Sequence[str | Key] = (),
-    inputs: Sequence[str | Key] = (),
-    params: Mapping[str, Any] | None = None,
-    notes: str = "",
-    run_id: str | None = None,
-    script: str | None = None,
-    offline: bool = True,
-    cache: Cache | None = None,
-    checkpoint_lineage: str = "",
-    resume: bool = True,
-    keep_checkpoints: bool = False,
-) -> Run:
-    """Stage the inputs, open a run record, and hold everything for the kernel.
+def begin_run(*args: Any, **kwargs: Any) -> Run:
+    """Recorded training is experiments only; a notebook cannot open a run of its own.
 
-    Returns once every input is on local disk and leased to this process. The
-    lease dies with the kernel — including a crash — so a forgotten notebook
-    cannot wedge the cache, and a live one cannot have its weights evicted.
-
-    Set ``offline=False`` only when the kernel itself must reach the internet;
-    artifacts always resolve through the cache regardless.
-
-    Checkpoints go to a lineage shared by every run with the same script and
-    inputs, so re-running a notebook after a crash continues from the last saved
-    step. ``resume=False`` starts that lineage over; ``keep_checkpoints=True``
-    holds on to them even after the run succeeds.
+    A run opened from a kernel would train whatever code the cells hold —
+    outside the fixed backbones, without declared parameters, without a
+    person's approval — and still be filed as a result. So it refuses, and says
+    what to do instead. A notebook remains the place to look at data and
+    results: ``nawat.resolve()`` stages inputs read-only, and ``nawat exp
+    report`` / ``nawat exp traces`` read experiments back.
     """
-    from . import default_cache
-
-    global _active
-    with _active_lock:
-        if _active is not None and not _active.finished:
-            raise Protected(
-                f"Run {_active.id} is still open in this kernel.",
-                "Finish it with run.finish(), or abandon it with run.cancel().",
-            )
-
-    cache = cache or default_cache()
-    runs = RunStore(cache.db, cache.config.state_dir / "runs")
-
-    if script is None:
-        found = notebook_path()
-        script = str(found) if found else UNKNOWN_SCRIPT
-
-    every_dataset = ((dataset,) if dataset is not None else ()) + tuple(datasets)
-    spec = RunSpec(
-        script=script,
-        model=Key.parse(model) if model is not None else None,
-        datasets=tuple(Key.parse(k) for k in every_dataset),
-        inputs=tuple(Key.parse(k) for k in inputs),
-        params={name: str(value) for name, value in (params or {}).items()},
-        notes=notes,
-        checkpoints=CheckpointPolicy(lineage=checkpoint_lineage, resume=resume, keep=keep_checkpoints),
+    raise Protected(
+        "Training runs are recorded only as experiments; nawat.begin_run() is not available.",
+        "Plan one from a preset (nawat preset ls; nawat exp plan <preset>), approve it at a terminal, then nawat exp run.",
     )
-
-    record = runs.create(spec, run_id)
-    staged: dict[str, Path] = {}
-    leases: list[LeaseRecord] = []
-    try:
-        record = runs.update(record.id, state=RunState.STAGING, started_at=time.time())
-        for key in spec.staged_keys():
-            staged[str(key)] = cache.resolve(key, lease=False)
-            leases.extend(cache.leases.acquire([key], holder=f"notebook {record.id}"))
-        record = runs.update(record.id, state=RunState.RUNNING, pid=os.getpid())
-    except BaseException as exc:  # noqa: BLE001 - the record must survive anything
-        cache.leases.release(lease.id for lease in leases)
-        message = f"{exc.cause} {exc.remedy or ''}".strip() if isinstance(exc, NawatError) else f"{type(exc).__name__}: {exc}"
-        runs.update(record.id, state=RunState.FAILED, finished_at=time.time(), error=message)
-        raise
-
-    run = Run(cache, runs, record, staged, leases, offline=offline)
-    run._prepare_checkpoints()
-    run._apply_env()
-    run.log(f"run {run.id} opened in kernel pid {os.getpid()}")
-    run.log(f"script  {spec.script}")
-    run.log(f"outputs {run.out_dir}")
-    run.log(f"ckpts   {run.checkpoint_dir}")
-    if run.resume_from:
-        run.log(f"resume  {Path(run.resume_from).name} — training continues from there")
-    for key, path in staged.items():
-        run.log(f"input   {key} -> {path}")
-    for name, value in run.params.items():
-        run.log(f"param   {name}={value}")
-    with _active_lock:
-        _active = run
-    return run
 
 
 def current_run() -> Run | None:

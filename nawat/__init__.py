@@ -113,7 +113,10 @@ def holding(*keys: str | Key, **kwargs) -> Iterator[dict[str, Path]]:
 
 
 def publish(source: str | Path, key: str | Key, **kwargs) -> PublishResult:
-    """Upload, verify, then reclaim the local copy."""
+    """Upload, verify, then reclaim the local copy. Not to runs/: only experiments write there."""
+    from .keys import require_not_experiment_output
+
+    require_not_experiment_output(key)
     return default_cache().publish(source, key, **kwargs)
 
 

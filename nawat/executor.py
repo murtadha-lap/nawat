@@ -187,8 +187,16 @@ class Executor:
         return path
 
     def validate(self, spec: RunSpec) -> None:
-        """Everything checkable before GPU time is spent (FR-5.4)."""
+        """Everything checkable before GPU time is spent (FR-5.4).
+
+        The executor runs experiments and nothing else: the script must be an
+        experiment's generated ``run.py`` and the experiment must be approved.
+        Training code written ad hoc — by a person in a hurry or by an agent —
+        cannot become a recorded run, so every run went through a fixed
+        backbone, declared parameters and a person's approval.
+        """
         self.resolve_script(spec.script)
+        self.require_experiment(spec.script)
         spec.checkpoint_lineage  # rejects an unusable --checkpoint-lineage here, not at hour 60
         for key in spec.staged_keys():
             if self.cache.get(key) is None and not self.cache.store.exists(key):
@@ -197,6 +205,19 @@ class Executor:
                         f"{key} is not cached and not in object storage.",
                         "Publish or seed it first, then resubmit.",
                     )
+
+    def require_experiment(self, script: str):
+        """The approved experiment behind a script, or a refusal that says how to make one."""
+        from .lab.finalize import experiment_for
+
+        experiment = experiment_for(self.config, script)
+        if experiment is None:
+            raise Protected(
+                f"{script} is not an experiment, and only experiments are run.",
+                "Train through a fixed backbone: nawat preset ls, then nawat exp plan <preset>.",
+            )
+        experiment.require_approved(self.config)
+        return experiment
 
     # -- planning ----------------------------------------------------------
 
@@ -307,6 +328,7 @@ class Executor:
         plan: Plan | None = None
         self._clear_cancel(run_id)
         try:
+            self.require_experiment(record.spec.script)
             record = self.runs.update(run_id, state=RunState.STAGING, started_at=time.time())
             inputs: dict[str, Path] = {}
             for key in record.spec.staged_keys():
@@ -353,7 +375,17 @@ class Executor:
             self.cache.leases.release(lease.id for lease in leases)
         # The record and its log are published whatever happened (FR-2.11).
         self._publish_record(record)
+        self._finalize_experiment(run_id)
         return self.runs.get(run_id)
+
+    def _finalize_experiment(self, run_id: str) -> None:
+        """When the script was an experiment's run.py, gather and publish the experiment folder."""
+        try:
+            from .lab.finalize import finalize
+
+            finalize(self.cache, self.runs, self.runs.get(run_id), log=lambda message: self._log(run_id, message))
+        except Exception as exc:  # noqa: BLE001 - the run's own outcome is already recorded
+            self._log(run_id, f"could not finalize the experiment folder: {type(exc).__name__}: {exc}")
 
     def _fail(self, run_id: str, error: str) -> RunRecord:
         record = self.runs.find(run_id)
