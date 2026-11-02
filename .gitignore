@@ -1,5 +1,6 @@
 .env
 .venv/
+.venv-vllm/
 __pycache__/
 *.egg-info/
 .pytest_cache/
@@ -10,3 +11,4 @@ Qwen2_5_VL_7B_Arabic_OCR_Detailed_HighRes_2Epochs_Per_Dataset_Nawat.ipynb
 train_qwen2_5_vl_arabic_ocr_nawat.py
 train_qwen2_5_vl_arabic_ocr_nawat.py.orig
 unsloth_compiled_cache/
+dist/
