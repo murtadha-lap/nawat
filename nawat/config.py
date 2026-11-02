@@ -16,7 +16,7 @@ from typing import Mapping
 
 from .dotenv import find as find_dotenv
 from .dotenv import load as load_dotenv
-from .errors import NotFound
+from .errors import InvalidConfig, NotFound
 from .units import parse_size
 
 _SECRET_FIELDS = frozenset({"access_key", "secret_key", "hub_token", "api_token"})
@@ -35,6 +35,39 @@ def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     if raw is None or raw == "":
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _int(env: Mapping[str, str], name: str, default: int) -> int:
+    raw = env.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise InvalidConfig(f"{name}={raw!r} is not a whole number.",
+                            f"Set it to one, such as {default}, in .env or the environment.") from None
+
+
+def _float(env: Mapping[str, str], name: str, default: float) -> float:
+    raw = env.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise InvalidConfig(f"{name}={raw!r} is not a number.",
+                            f"Set it to one, such as {default:g}, in .env or the environment.") from None
+
+
+def _size(env: Mapping[str, str], name: str, default: str) -> int:
+    raw = env.get(name)
+    if raw is None or raw.strip() == "":
+        raw = default
+    try:
+        return parse_size(raw)
+    except ValueError:
+        raise InvalidConfig(f"{name}={raw!r} is not a size.",
+                            "Write it like 120GB or 12GiB, in .env or the environment.") from None
 
 
 def _merge_dotenv(base: Mapping[str, str], env_file) -> tuple[Mapping[str, str], Path | None]:
@@ -141,8 +174,8 @@ class Config:
             cache_root=cache_root,
             workspace_root=Path(env.get("NAWAT_WORKSPACE", DEFAULT_WORKSPACE)).expanduser().resolve(),
             state_dir=state_dir,
-            cache_ceiling=parse_size(env.get("NAWAT_CACHE_CEILING", DEFAULT_CEILING)),
-            min_free=parse_size(env.get("NAWAT_MIN_FREE", DEFAULT_MIN_FREE)),
+            cache_ceiling=_size(env, "NAWAT_CACHE_CEILING", DEFAULT_CEILING),
+            min_free=_size(env, "NAWAT_MIN_FREE", DEFAULT_MIN_FREE),
             checkpoint_root=Path(checkpoints).expanduser().resolve() if checkpoints else None,
             store_backend=env.get("NAWAT_STORE_BACKEND", "s3").strip().lower(),
             bucket=env.get("NAWAT_S3_BUCKET", "nawat"),
@@ -154,15 +187,15 @@ class Config:
             secret_key=env.get("NAWAT_S3_SECRET_KEY") or env.get("AWS_SECRET_ACCESS_KEY") or None,
             hub_token=env.get("HF_TOKEN") or env.get("HUGGING_FACE_HUB_TOKEN") or None,
             offline=_flag(env, "NAWAT_OFFLINE", False),
-            transfer_workers=int(env.get("NAWAT_TRANSFER_WORKERS", "8")),
-            multipart_threshold=parse_size(env.get("NAWAT_MULTIPART_THRESHOLD", "64MB")),
-            multipart_chunk=parse_size(env.get("NAWAT_MULTIPART_CHUNK", "32MB")),
+            transfer_workers=_int(env, "NAWAT_TRANSFER_WORKERS", 8),
+            multipart_threshold=_size(env, "NAWAT_MULTIPART_THRESHOLD", "64MB"),
+            multipart_chunk=_size(env, "NAWAT_MULTIPART_CHUNK", "32MB"),
             api_host=env.get("NAWAT_API_HOST", "127.0.0.1"),
-            api_port=int(env.get("NAWAT_API_PORT", "8080")),
+            api_port=_int(env, "NAWAT_API_PORT", 8080),
             api_token=env.get("NAWAT_API_TOKEN") or None,
-            serve_port=int(env.get("NAWAT_SERVE_PORT", "8001")),
-            serve_idle_timeout=float(env.get("NAWAT_SERVE_IDLE_TIMEOUT", "900")),
-            serve_startup_timeout=float(env.get("NAWAT_SERVE_STARTUP_TIMEOUT", "600")),
+            serve_port=_int(env, "NAWAT_SERVE_PORT", 8001),
+            serve_idle_timeout=_float(env, "NAWAT_SERVE_IDLE_TIMEOUT", 900.0),
+            serve_startup_timeout=_float(env, "NAWAT_SERVE_STARTUP_TIMEOUT", 600.0),
             serve_backend=env.get("NAWAT_SERVE_BACKEND", "vllm").strip().lower(),
             serve_extra_args=env.get("NAWAT_SERVE_EXTRA_ARGS", ""),
             env_file=loaded,

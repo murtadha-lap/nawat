@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+Fixes from a review of 0.3.0b1. Each has a regression test in
+`tests/test_regressions.py`.
+
+- `nawat registry` (and the API's `/registry`) failed with InvalidKey once any
+  experiment had run: the runner left `code/__pycache__` in the experiment
+  folder and it was uploaded with it. Bytecode caches are no longer written
+  there, never uploaded, and the registry lists artifacts — the shallowest
+  folder holding files — rather than every folder inside them.
+- `nawat estimate` no longer needs the `api` extra; the GPU reading lives in
+  `nawat.gpu`.
+- The `notebook` extra includes JupyterLab, so `uv sync --extra notebook` and
+  `uv run nawat jupyter` work as documented.
+- Inside the sandbox, an approval that cannot be verified (there is no key
+  there) is refused instead of accepted as "unverified". A run in the sandbox is
+  started from the host with `nawat exp run`, which checks the signature and
+  then launches it in the container. `AGENTS.md` and `docs/lab.md` say so.
+- `nawat exp logs/metrics/cancel` on the host now reach an experiment that ran
+  in the sandbox: live, through the container; afterwards, from the copy in
+  `attempts/<run>/`.
+- Ctrl-C during `nawat exp run` cancels the run — the trainer is stopped, its
+  checkpoints kept, its record and experiment folder published — instead of
+  leaving it running unwatched. Cancelled runs are finalised like any other; a
+  cancel that arrives while inputs are staging stops the trainer from starting.
+- `nawat exp rm <exp> --parts experiment` removes the local folder; before, it
+  did so only together with every other part.
+- `nawat shard --no-publish` works when the corpus and the cache are on
+  different filesystems.
+- `nawat exp traces --clear` deletes the remote copy first, so a refused delete
+  leaves the local one in place.
+- `nawat exp plan --save-preset` saves the preset before planning, so a taken
+  name fails before an experiment exists.
+- Bad numbers or sizes in `.env` are reported as configuration errors (exit 2)
+  rather than tracebacks.
+- The API's `/health` shows only liveness without the token; the token check is
+  constant-time. A run the queue cannot execute is marked failed instead of
+  being retried forever.
+- `env-<run>.json` records every installed distribution (`installed`);
+  `pip freeze` recorded nothing in a uv environment.
+- Messages that still named `nawat submit`, `resume`, `scripts` and
+  `serve status` name the commands that exist. The README's troubleshooting and
+  install sections match the experiment workflow and list
+  `sentence-transformers`, `snac` and `torchaudio`, which the embedding, TTS
+  and STT backbones need (a test keeps the README and the sandbox image in
+  step). `.env.example` documents the control-plane variables and no longer
+  lists the removed agent ones.
+- Removed what the `submit` era left behind: the notebook `Run` class and
+  kernel-run accessors (`nawat.Run`, `nawat.current_run`), the `.ipynb`
+  executor path, the run-naming prompt and the training-script scanner in
+  `nawat.estimator`.
+
 ## 0.3.0b1 — beta (2026-11-02)
 
 Training becomes experiments. Every training run is now an experiment: a fixed

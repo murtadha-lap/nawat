@@ -27,7 +27,7 @@ from typing import Iterator, Sequence
 from . import checkpoints
 from .config import Config
 from .db import Database
-from .errors import InsufficientSpace, NotFound, Protected, StoreUnavailable, VerificationFailed
+from .errors import InsufficientSpace, InvalidKey, NotFound, Protected, StoreUnavailable, VerificationFailed
 from .hub import Hub, build_hub
 from .keys import Key
 from .leases import LeaseRecord, LeaseRegistry
@@ -705,11 +705,16 @@ class Cache:
     # -- registry ----------------------------------------------------------
 
     def registry(self, kinds: Sequence[str] | None = None) -> list[Key]:
-        """Keys present in object storage, whether or not they are cached (FR-5.2)."""
+        """Keys present in object storage, whether or not they are cached (FR-5.2).
+
+        An artifact is the shallowest prefix that holds files directly; the
+        folders inside it — a dataset's ``data/``, an experiment's ``code/`` —
+        are its contents, not artifacts of their own.
+        """
         from .keys import KINDS
 
         wanted = tuple(kinds) if kinds else KINDS
-        found: list[Key] = []
+        folders: set[str] = set()
         store = self.store
         if hasattr(store, "root"):  # local backend: walk the tree
             root = Path(getattr(store, "root"))
@@ -717,33 +722,41 @@ class Cache:
                 base = root / kind
                 if not base.is_dir():
                     continue
-                for path in sorted(base.rglob("*")):
+                for path in base.rglob("*"):
                     if path.is_dir() and any(child.is_file() for child in path.iterdir()):
-                        found.append(Key.parse(f"{kind}/{path.relative_to(base).as_posix()}"))
-            return found
+                        folders.add(f"{kind}/{path.relative_to(base).as_posix()}")
+            return _artifact_roots(folders)
         client = getattr(store, "client")
         bucket, prefix = getattr(store, "bucket"), getattr(store, "prefix")
-        seen: set[str] = set()
         paginator = client.get_paginator("list_objects_v2")
         for kind in wanted:
             base = "/".join(p for p in (prefix, kind) if p) + "/"
             try:
-                pages = paginator.paginate(Bucket=bucket, Prefix=base)
-                for page in pages:
+                for page in paginator.paginate(Bucket=bucket, Prefix=base):
                     for obj in page.get("Contents", ()):
                         rel = obj["Key"][len(base) :]
-                        if "/" not in rel:
-                            continue
-                        name = f"{kind}/{rel.rsplit('/', 1)[0]}"
-                        if name not in seen:
-                            seen.add(name)
-                            found.append(Key.parse(name))
+                        if "/" in rel:
+                            folders.add(f"{kind}/{rel.rsplit('/', 1)[0]}")
             except Exception as exc:
                 raise StoreUnavailable(
                     f"Could not list {kind} in object storage: {type(exc).__name__}.",
                     "Check that the store is reachable and the credentials are current.",
                 ) from exc
-        return found
+        return _artifact_roots(folders)
+
+
+def _artifact_roots(folders: set[str]) -> list[Key]:
+    """The shallowest folders as keys. A folder inside another, or one that is not a usable name, is skipped."""
+    found: list[Key] = []
+    for name in sorted(folders):
+        parts = name.split("/")
+        if any("/".join(parts[:depth]) in folders for depth in range(2, len(parts))):
+            continue
+        try:
+            found.append(Key.parse(name))
+        except InvalidKey:
+            continue
+    return found
 
 
 def open_cache(config: Config | None = None) -> Cache:

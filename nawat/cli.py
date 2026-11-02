@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -23,7 +24,7 @@ from pathlib import Path
 from . import checkpoints
 from .cache import Cache, open_cache
 from .config import UNSET, Config
-from .errors import NawatError
+from .errors import NawatError, Protected
 from .keys import KINDS, Key, require_not_experiment_output
 from .runs import RunState, RunStore
 from .units import bar, human_age, human_bytes, parse_size
@@ -287,25 +288,48 @@ def _run_store(cache: Cache) -> RunStore:
     return RunStore(cache.db, cache.config.state_dir / "runs")
 
 
-def _executor(cache: Cache, ask_name=None):
+def _executor(cache: Cache):
     from .executor import Executor
 
-    return Executor(cache, _run_store(cache), ask_name=ask_name)
+    return Executor(cache, _run_store(cache))
 
 
 def _launch(executor, record, *, queue: bool) -> int:
-    """Run it here and stream the log, or hand it to the control plane."""
+    """Run it here and stream the log, or hand it to the control plane.
+
+    Ctrl-C cancels the run — the trainer is stopped, its checkpoints are kept,
+    its record and experiment folder are published — rather than leaving it
+    running with nobody left to publish what it makes.
+    """
     if queue:
         print(f"Queued run {record.id}. It starts when the control plane reaches it.")
         return 0
 
     _err(f"run {record.id}  {record.spec.script}")
-    finished: list = []
-    worker = threading.Thread(target=lambda: finished.append(executor.execute(record.id)), daemon=True)
+
+    def work() -> None:
+        try:
+            executor.execute(record.id)
+        except NawatError as exc:  # e.g. cancelled before it started
+            _err(f"{PROGRAM}: {exc}")
+
+    worker = threading.Thread(target=work, daemon=True)
     worker.start()
-    for chunk in executor.runs.follow_log(record.id):
-        sys.stdout.write(chunk)
-        sys.stdout.flush()
+    try:
+        for chunk in executor.runs.follow_log(record.id):
+            sys.stdout.write(chunk)
+            sys.stdout.flush()
+    except KeyboardInterrupt:
+        _err(f"\nInterrupted — cancelling run {record.id}; its checkpoints are kept.")
+        try:
+            executor.cancel(record.id)
+        except NawatError as exc:
+            _err(f"{PROGRAM}: {exc}")
+        worker.join()
+        final = executor.runs.get(record.id)
+        _err(f"run {final.id} {final.state.value}. Run the experiment again to continue from its last checkpoint:"
+             f" {PROGRAM} exp run {final.name or '<experiment>'}")
+        return 130
     worker.join()
 
     final = executor.runs.get(record.id)
@@ -318,7 +342,8 @@ def _launch(executor, record, *, queue: bool) -> int:
     if final.error:
         _err(final.error)
     if final.state is not RunState.SUCCEEDED and final.checkpoint:
-        _err(f"Nothing is lost up to that checkpoint. Continue from it with: {PROGRAM} resume {final.id}")
+        _err(f"Nothing is lost up to that checkpoint. Run the experiment again to continue from it:"
+             f" {PROGRAM} exp run {final.name or '<experiment>'}")
     return 0 if final.state is RunState.SUCCEEDED else 1
 
 
@@ -330,7 +355,7 @@ def cmd_runs(cache: Cache, args) -> int:
         return 0
     if not records:
         print("No runs yet.")
-        print(f"Submit one with: {PROGRAM} submit train.py --model models/<repo> --dataset datasets/<name>")
+        print(f"Plan an experiment with: {PROGRAM} exp plan <preset> — then approve it and run it.")
         return 0
     now = time.time()
     rows = [
@@ -375,7 +400,7 @@ def cmd_run(cache: Cache, args) -> int:
     if record.error:
         print(f"error      {record.error}")
     if record.checkpoint and record.state is not RunState.SUCCEEDED:
-        print(f"\nContinue from that checkpoint with: {PROGRAM} resume {record.id}")
+        print(f"\nRun the experiment again to continue from that checkpoint: {PROGRAM} exp run {record.name or '<experiment>'}")
     return 0
 
 
@@ -481,7 +506,6 @@ def cmd_cancel(cache: Cache, args) -> int:
 
 def cmd_metrics(cache: Cache, args) -> int:
     from . import metrics
-    from .units import spark
 
     runs = _run_store(cache)
     runs.get(args.run_id)
@@ -495,20 +519,26 @@ def cmd_metrics(cache: Cache, args) -> int:
         for point in metrics.follow(path, running):
             print(json.dumps(point))
         return 0
+    return print_metrics(path, args.run_id, as_json=args.json)
+
+
+def print_metrics(path: Path, label: str, *, as_json: bool) -> int:
+    """Render a metric series: a run's own, or the copy an experiment keeps under attempts/."""
+    from . import metrics
+    from .units import spark
 
     points = metrics.read_points(path)
-    if args.json:
+    if as_json:
         print(json.dumps({"series": metrics.series(points), "events": metrics.events(points)}, indent=2))
         return 0
     if not points:
-        print(f"Run {args.run_id} recorded no metrics.")
-        print("Log them from the script with nawat.metrics.log(step=..., loss=...),")
-        print("or pass callbacks=[nawat.metrics.trainer_callback()] to the trainer.")
+        print(f"Run {label} recorded no metrics.")
+        print("Backbones log through the metrics callback, so a run that never reached its first logging step has none.")
         return 0
 
-    print(f"run {args.run_id} · {len(points)} points\n")
+    print(f"run {label} · {len(points)} points\n")
     all_series = metrics.series(points)
-    name_width = max(len(name) for name in all_series)
+    name_width = max((len(name) for name in all_series), default=0)
     for name in sorted(all_series):
         entries = all_series[name]
         values = [entry["value"] for entry in entries]
@@ -574,7 +604,7 @@ def cmd_session(cache: Cache, args) -> int:
 def cmd_adapter(cache: Cache, args) -> int:
     manager = _sessions(cache)
     if args.unload:
-        session = manager.unload_adapter(args.unload)
+        manager.unload_adapter(args.unload)
         print(f"Unloaded {args.unload}.")
         return 0
     if not args.key:
@@ -588,8 +618,8 @@ def cmd_adapter(cache: Cache, args) -> int:
 
 
 def cmd_estimate(cache: Cache, args) -> int:
-    from .api import gpu_info
     from .estimator import estimate, params_from_bytes, parse_params
+    from .gpu import gpu_info
 
     if args.params:
         params = parse_params(args.params)
@@ -630,7 +660,7 @@ def cmd_lab(cache: Cache, args) -> int:
     try:
         completed = subprocess.run(command)
     except FileNotFoundError:
-        _err("JupyterLab is not installed. Install it with: pip install jupyterlab")
+        _err("JupyterLab is not installed. Install it with: uv sync --extra notebook")
         return 1
     return completed.returncode
 
@@ -639,7 +669,7 @@ def cmd_api(cache: Cache, args) -> int:
     try:
         from .api import serve as serve_api
     except ImportError as exc:
-        _err(f"The control plane needs its extra: pip install -e '.[api]'  ({exc})")
+        _err(f"The control plane needs its extra: uv sync --extra api  ({exc})")
         return 1
     config = cache.config
     _err(f"Nawāt control plane on http://{config.api_host}:{config.api_port}")
@@ -669,7 +699,9 @@ def cmd_shard(cache: Cache, args) -> int:
         print(f"{index.total_files} files → {len(index.shards)} shard(s), {human_bytes(index.total_bytes)} of content.")
         if args.no_publish:
             final = source.parent / (source.name + "-sharded")
-            dest.rename(final)
+            if final.exists():
+                raise Protected(f"{final} already exists.", "Move it away first, or let the shards be published.")
+            shutil.move(str(dest), str(final))  # the staging area may be on another filesystem than the corpus
             print(f"Written to {final}; publish later with: {PROGRAM} add {final} datasets/<name>")
             return 0
         status = cache.add(dest, args.key)

@@ -140,7 +140,8 @@ def environment(experiment: Experiment) -> dict[str, Any]:
                 env = json.loads(path.read_text())
             except ValueError:
                 continue
-            env.pop("pip_freeze", None)
+            env.pop("installed", None)
+            env.pop("pip_freeze", None)  # older records
             return env
     return {}
 

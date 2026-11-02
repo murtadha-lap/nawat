@@ -454,7 +454,7 @@ class SessionManager:
     def unload_adapter(self, name: str) -> Session:
         session = self.require()
         if name not in session.adapters:
-            raise NotFound(f"No adapter named {name} is loaded.", "List them with: nawat serve status")
+            raise NotFound(f"No adapter named {name} is loaded.", "List them with: nawat session")
         self._post("/v1/unload_lora_adapter", {"lora_name": name}, session)
         session.adapters.pop(name, None)
         session.last_used = time.time()
@@ -479,7 +479,7 @@ class SessionManager:
         except (urllib.error.URLError, OSError) as exc:
             raise StoreUnavailable(
                 f"The inference server did not answer {path}: {type(exc).__name__}.",
-                "It may still be starting, or it may have died — check: nawat serve status",
+                "It may still be starting, or it may have died — check: nawat session --log",
             ) from exc
         try:
             return json.loads(body) if body.strip() else None

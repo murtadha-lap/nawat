@@ -26,6 +26,8 @@ from .units import human_bytes
 #: counted towards an artifact's size, never compared during verification.
 INTERNAL_PREFIX = ".nawat"
 PART_SUFFIX = ".nawat-part"
+#: Python's bytecode caches: written beside code that runs, never part of an artifact.
+BYTECODE_DIR = "__pycache__"
 
 Progress = Callable[[str, int, int], None]
 
@@ -42,7 +44,8 @@ Manifest = dict[str, ObjectStat]
 
 
 def is_internal(rel: str) -> bool:
-    return any(part.startswith(INTERNAL_PREFIX) for part in Path(rel).parts) or rel.endswith(PART_SUFFIX)
+    parts = Path(rel).parts
+    return any(part.startswith(INTERNAL_PREFIX) or part == BYTECODE_DIR for part in parts) or rel.endswith(PART_SUFFIX)
 
 
 def scan_local(root: Path) -> Manifest:

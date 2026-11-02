@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any, Iterator, Mapping
 
 from . import checkpoints as checkpoint_store
 from .checkpoints import CheckpointPolicy
@@ -116,10 +116,6 @@ class RunSpec:
             if key not in ordered:
                 ordered.append(key)
         return tuple(ordered)
-
-    @property
-    def is_notebook(self) -> bool:
-        return self.script.endswith(".ipynb")
 
     @property
     def checkpoint_lineage(self) -> str:

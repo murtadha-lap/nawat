@@ -2,7 +2,13 @@
 
 Every message states the cause and the corrective action on one line
 (PRD 9.8 Voice, NFR-3.3). Exit codes are stable so shell scripts can branch
-on the failure class without parsing text.
+on the failure class without parsing text:
+
+    1  any other failure          6  insufficient space
+    2  bad input — a key, a configuration value, a block or a parameter
+    3  not found                  7  offline
+    4  object storage unavailable 8  protected
+    5  verification failed        9  approval required (nawat.lab.experiment.ApprovalRequired)
 """
 
 from __future__ import annotations
@@ -21,6 +27,12 @@ class NawatError(Exception):
 
 class InvalidKey(NawatError):
     """A key does not name an addressable artifact."""
+
+    exit_code = 2
+
+
+class InvalidConfig(NawatError):
+    """A configuration value cannot be read. Nothing was started."""
 
     exit_code = 2
 

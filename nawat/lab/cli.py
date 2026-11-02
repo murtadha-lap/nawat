@@ -18,6 +18,7 @@ from . import storage
 from . import sweep as sweep_mod
 from .blocks import KINDS, Library
 from .experiment import SANDBOX_ENV, Experiment, find, list_experiments, plan_experiment
+from .params import format_value
 from .presets import Presets, apply_sets, apply_uses
 
 
@@ -95,8 +96,6 @@ def cmd_preset_show(cache, args) -> int:
         for name, value in resolved.values.items():
             changed = resolved.sources.get(name) != "default"
             spec = block.params[name]
-            from .params import format_value
-
             rows.append([f"{label}.{name}", rep.truncate(format_value(value), 44) + (" ◀" if changed else ""),
                          rep.truncate(format_value(spec.default), 30), spec.help[:70]])
     _table(["parameter", "value", "default", "meaning"], rows)
@@ -143,8 +142,6 @@ def cmd_block_show(cache, args) -> int:
         print(block.doc.strip())
     if block.params:
         print()
-        from .params import format_value
-
         _table(["parameter", "default", "meaning"],
                [[n, format_value(s.default), s.help + (f"  [{' | '.join(map(str, s.choices))}]" if s.choices else "")]
                 for n, s in block.params.items()])
@@ -174,23 +171,25 @@ def cmd_block_save_as(cache, args) -> int:
 
 
 def cmd_exp_plan(cache, args) -> int:
-    experiment = plan_experiment(
-        cache.config, args.preset, name=args.name, group=args.group, sets=_pairs(args.set, "setting"),
-        uses=_pairs(args.use, "block choice"), model=args.model, datasets=args.dataset or None, notes=args.notes or "",
-        store=cache.store,
-    )
+    sets, uses = _pairs(args.set, "setting"), _pairs(args.use, "block choice")
     if args.save_preset:
+        # Saved first, so a preset name that is already taken fails before an experiment exists.
         presets = Presets(cache.config)
         saved = presets.get(args.preset)
         saved.name, saved.parent = args.save_preset, args.preset
-        apply_uses(saved, _pairs(args.use, "block choice"))
-        apply_sets(saved, _pairs(args.set, "setting"))
+        apply_uses(saved, uses)
+        apply_sets(saved, sets)
         if args.model:
             saved.model = args.model
         if args.dataset:
             saved.datasets = list(args.dataset)
+        exp_mod.resolve_plan(Library(cache.config), saved)  # a bad choice fails here, before anything is written
         presets.save_new(saved)
         print(f"saved preset {args.save_preset}")
+    experiment = plan_experiment(
+        cache.config, args.preset, name=args.name, group=args.group, sets=sets, uses=uses, model=args.model,
+        datasets=args.dataset or None, notes=args.notes or "", store=cache.store,
+    )
     _print_plan(experiment)
     print(f"\nPlanned {experiment.name} in {experiment.dir}")
     print(f"Approve it at a terminal on the host: nawat exp approve {experiment.name}")
@@ -269,8 +268,9 @@ def run_experiment(cache, experiment: Experiment, *, queue: bool = False, fresh:
         if not sbx.running(container):
             raise NawatError(f"Experiment {experiment.name} runs in the sandbox, which is not running.", "Start it: nawat sandbox up")
         print(f"running {experiment.name} inside sandbox {container}")
+        # The approval was verified above with the host's key. The sandbox has none, so it is told what was verified.
         return sbx.call(sbx.exec_args(container, ["nawat", "exp", "run", experiment.name] + (["--fresh"] if fresh else []),
-                                      interactive=False))
+                                      interactive=False, env={exp_mod.HOST_VERIFIED_ENV: experiment.plan_hash}))
     cli = _main()
     executor = cli._executor(cache)
     spec = experiment_spec(experiment, fresh)
@@ -291,19 +291,69 @@ def _latest_run(experiment: Experiment) -> str:
     return attempts[-1]
 
 
+def _in_sandbox(cache, experiment: Experiment, command: list[str]) -> int | None:
+    """Run a nawat command inside the sandbox when that is where this experiment's runs live; None otherwise."""
+    if os.environ.get(SANDBOX_ENV):
+        return None
+    runtime = (experiment.data["blocks"].get("runtime") or [{"name": "host"}])[0]["name"]
+    if runtime != "sandbox":
+        return None
+    container = experiment.data["params"].get("runtime", {}).get("container", sbx.CONTAINER)
+    if not sbx.running(container):
+        return None
+    return sbx.call(sbx.exec_args(container, ["nawat", *command], interactive=False))
+
+
+def _not_here(experiment: Experiment, run_id: str, what: str) -> NotFound:
+    return NotFound(f"Run {run_id} of {experiment.name} did not happen on this machine, and {what} is not here.",
+                    "If it ran in the sandbox, start the sandbox (nawat sandbox up) to reach it there.")
+
+
 def cmd_exp_logs(cache, args) -> int:
+    """The latest attempt's log: from this machine's run store, live from the sandbox, or the copy in attempts/."""
     experiment = find(cache.config, args.name)
-    return _main().cmd_logs(cache, argparse.Namespace(run_id=_latest_run(experiment), follow=args.follow, tail=args.tail))
+    run_id = _latest_run(experiment)
+    main = _main()
+    if main._run_store(cache).find(run_id) is not None:
+        return main.cmd_logs(cache, argparse.Namespace(run_id=run_id, follow=args.follow, tail=args.tail))
+    delegated = _in_sandbox(cache, experiment, ["logs", run_id] + (["-f"] if args.follow else [])
+                            + (["--tail", str(args.tail)] if args.tail else []))
+    if delegated is not None:
+        return delegated
+    copy = experiment.path("attempts", run_id, "run.log")
+    if not copy.is_file():
+        raise _not_here(experiment, run_id, "its log")
+    text = copy.read_text(errors="replace")
+    sys.stdout.write("".join(text.splitlines(keepends=True)[-args.tail:]) if args.tail else text)
+    return 0
 
 
 def cmd_exp_metrics(cache, args) -> int:
     experiment = find(cache.config, args.name)
-    return _main().cmd_metrics(cache, argparse.Namespace(run_id=_latest_run(experiment), follow=args.follow, json=args.json))
+    run_id = _latest_run(experiment)
+    main = _main()
+    if main._run_store(cache).find(run_id) is not None:
+        return main.cmd_metrics(cache, argparse.Namespace(run_id=run_id, follow=args.follow, json=args.json))
+    delegated = _in_sandbox(cache, experiment, ["metrics", run_id] + (["-f"] if args.follow else [])
+                            + (["--json"] if args.json else []))
+    if delegated is not None:
+        return delegated
+    copy = experiment.path("attempts", run_id, "metrics.jsonl")
+    if not copy.is_file():
+        raise _not_here(experiment, run_id, "its metric series")
+    return main.print_metrics(copy, run_id, as_json=args.json)
 
 
 def cmd_exp_cancel(cache, args) -> int:
     experiment = find(cache.config, args.name)
-    return _main().cmd_cancel(cache, argparse.Namespace(run_id=_latest_run(experiment)))
+    run_id = _latest_run(experiment)
+    main = _main()
+    if main._run_store(cache).find(run_id) is None:
+        delegated = _in_sandbox(cache, experiment, ["cancel", run_id])
+        if delegated is not None:
+            return delegated
+        raise _not_here(experiment, run_id, "a process to stop")
+    return main.cmd_cancel(cache, argparse.Namespace(run_id=run_id))
 
 
 def cmd_exp_ls(cache, args) -> int:
@@ -410,10 +460,11 @@ def _clear_traces(cache, experiments, yes) -> int:
         size = sum(f.stat().st_size for f in directory.glob("*")) if directory.is_dir() else 0
         if not _confirm(f"Delete the traces of {experiment.name} ({human_bytes(size)} here, and in object storage)?", yes):
             continue
+        # Object storage first: if that is refused (a live run, the sandbox), the local copy is still here.
+        count, freed = storage.delete(cache.store, f"runs/{experiment.name}/traces", live_keys=_live_keys(cache))
         if directory.is_dir():
             for f in directory.glob("*"):
                 f.unlink()
-        count, freed = storage.delete(cache.store, f"runs/{experiment.name}/traces", live_keys=_live_keys(cache))
         print(f"cleared traces of {experiment.name}: {human_bytes(size)} local, {count} objects / {human_bytes(freed)} remote")
     return 0
 
@@ -457,11 +508,11 @@ def cmd_exp_rm(cache, args) -> int:
     if "this machine" in where:
         import shutil
 
-        for part in parts:
+        for part in [p for p in PARTS if p in parts]:  # the experiment folder goes last: the others read it
             if part == "traces":
                 for f in experiment.path("traces").glob("*"):
                     f.unlink()
-            elif part == "experiment" and parts == PARTS:
+            elif part == "experiment":
                 shutil.rmtree(experiment.dir, ignore_errors=True)
                 print(f"local   {experiment.dir} removed")
             elif part in ("adapter", "merged", "gguf", "record"):

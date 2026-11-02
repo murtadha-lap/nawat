@@ -10,12 +10,13 @@ Artifact classes come out as separate keys named for the subdirectory the script
 wrote them to, so a run that writes ``adapter/`` and ``gguf/`` publishes
 ``runs/<id>/adapter`` and ``runs/<id>/gguf`` without declaring anything.
 
-Outputs are published only when the script exits 0, which leaves the question of
-what a run that took two days and then died has to show for itself. The answer
-is its checkpoints: they are written outside the output directory, into a
-durable lineage that outlives the run (see :mod:`nawat.checkpoints`), kept
-whenever the run does not succeed, and offered back to the next run of the same
-shape through ``NAWAT_RESUME_FROM``.
+Whatever the exit code, what the run wrote is published and the record says how
+it ended, so a partial result is never mistaken for a finished one. What a run
+that took two days and then died has to show for itself is its checkpoints: they
+are written outside the output directory, into a durable lineage that outlives
+the run (see :mod:`nawat.checkpoints`), kept whenever the run does not succeed,
+and offered back to the next run of the same experiment through
+``NAWAT_RESUME_FROM``.
 """
 
 from __future__ import annotations
@@ -31,14 +32,13 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from . import checkpoints as checkpoint_store
 from .cache import Cache
 from .errors import InvalidKey, NawatError, NotFound, Protected
 from .keys import Key
 from .leases import LeaseRecord
-from .process import process_alive, terminate_group
+from .process import terminate_group
 from .runs import RunRecord, RunSpec, RunState, RunStore
 from .units import human_bytes
 
@@ -61,9 +61,6 @@ CHECKPOINT_CLASS = "checkpoint"
 
 _ENV_NAME = re.compile(r"[^A-Z0-9]+")
 
-#: Asked for a run's name at the end of it. Returns None to keep the run id.
-NamePrompt = Callable[["RunRecord"], "str | None"]
-
 
 def param_env_name(name: str) -> str:
     return "NAWAT_PARAM_" + _ENV_NAME.sub("_", name.upper()).strip("_")
@@ -83,10 +80,9 @@ class Plan:
 
 # -- publication --------------------------------------------------------------
 #
-# Free functions rather than methods, because a run driven from a notebook
-# kernel (see :mod:`nawat.notebook`) has no subprocess and therefore no
-# Executor, and must still publish byte-for-byte identically: same artifact
-# classes, same keys, same verified-then-reclaimed order.
+# Free functions rather than methods, so that anything which ends a run — the
+# executor, or the lab's finalisation — publishes byte-for-byte identically:
+# same artifact classes, same keys, same verified-then-reclaimed order.
 
 
 def run_output_dir(config, run_id: str) -> Path:
@@ -156,14 +152,10 @@ def prune_empty(directory: Path) -> None:
 class Executor:
     """Runs one job at a time, start to finish."""
 
-    def __init__(self, cache: Cache, runs: RunStore, ask_name: "NamePrompt | None" = None) -> None:
+    def __init__(self, cache: Cache, runs: RunStore) -> None:
         self.cache = cache
         self.runs = runs
         self.config = cache.config
-        #: Asked for a name once the training process is over and before
-        #: anything is uploaded. The CLI supplies one when a terminal is
-        #: attached; the API and the queue leave it None and keep the run id.
-        self.ask_name = ask_name
 
     # -- validation --------------------------------------------------------
 
@@ -175,15 +167,12 @@ class Executor:
         if workspace.resolve() not in path.parents and path != workspace.resolve():
             raise InvalidKey(
                 f"{script} is outside the workspace.",
-                f"Training scripts must live under {workspace}.",
+                f"An experiment's run.py lives under {workspace}/lab/experiments.",
             )
         if not path.is_file():
-            raise NotFound(f"{path} does not exist.", "Check the script name, or list them with: nawat scripts")
-        if path.suffix not in (".py", ".ipynb"):
-            raise InvalidKey(
-                f"{path.name} is neither a Python script nor a notebook.",
-                "Submit a .py or .ipynb entrypoint.",
-            )
+            raise NotFound(f"{path} does not exist.", "Plan the experiment again: nawat exp plan <preset>")
+        if path.suffix != ".py":
+            raise InvalidKey(f"{path.name} is not a Python entry point.", "Only an experiment's run.py is run.")
         return path
 
     def validate(self, spec: RunSpec) -> None:
@@ -203,7 +192,7 @@ class Executor:
                 if key.hub_repo_id is None or self.config.offline:
                     raise NotFound(
                         f"{key} is not cached and not in object storage.",
-                        "Publish or seed it first, then resubmit.",
+                        "Publish or seed it first, then run the experiment again.",
                     )
 
     def require_experiment(self, script: str):
@@ -226,26 +215,7 @@ class Executor:
         out_dir = self.output_dir(record.id)
         out_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_dir, resume_from = self.prepare_checkpoints(record)
-        if record.spec.is_notebook:
-            executed = out_dir / RECORD_CLASS / f"{script.stem}.executed.ipynb"
-            executed.parent.mkdir(parents=True, exist_ok=True)
-            # The executed notebook *is* the run record for a notebook run (FR-2.5).
-            command = [
-                sys.executable,
-                "-m",
-                "jupyter",
-                "nbconvert",
-                "--to",
-                "notebook",
-                "--execute",
-                "--allow-errors",
-                "--ExecutePreprocessor.timeout=-1",
-                "--output",
-                str(executed),
-                str(script),
-            ]
-        else:
-            command = [sys.executable, "-u", str(script)]
+        command = [sys.executable, "-u", str(script)]
         return Plan(
             script=script,
             command=command,
@@ -297,6 +267,9 @@ class Executor:
                 "NAWAT_CHECKPOINT_LINEAGE": spec.checkpoint_lineage,
                 "NAWAT_RESUME_FROM": str(plan.resume_from) if plan.resume_from else "",
                 "PYTHONUNBUFFERED": "1",
+                # The frozen code/ folder must stay exactly what was planned:
+                # no .pyc caches written beside it, none uploaded with it.
+                "PYTHONDONTWRITEBYTECODE": "1",
                 # The run is offline by construction: an input that was not
                 # declared and staged fails here rather than being downloaded
                 # silently, which would break both reproducibility and the disk
@@ -323,10 +296,9 @@ class Executor:
         """Stage, run, publish, reclaim. Returns the finished record."""
         record = self.runs.get(run_id)
         if record.state.terminal:
-            raise Protected(f"Run {run_id} has already finished.", "Submit a new run instead.")
+            raise Protected(f"Run {run_id} has already finished.", "Run the experiment again to start a new attempt.")
         leases: list[LeaseRecord] = []
         plan: Plan | None = None
-        self._clear_cancel(run_id)
         try:
             self.require_experiment(record.spec.script)
             record = self.runs.update(run_id, state=RunState.STAGING, started_at=time.time())
@@ -339,31 +311,28 @@ class Executor:
             plan = self.plan(record, inputs)
             record = self._run_process(record, plan)
 
-            if record.state is RunState.CANCELLED:
-                return self._settle_checkpoints(record, plan)
-
-            # Named before anything is uploaded, because the name *is* the
-            # folder it is uploaded into.
-            record = self._name_run(record)
-            record = self.runs.update(run_id, state=RunState.PUBLISHING)
-            if record.exit_code == 0:
-                artifacts = self._publish_outputs(record, plan)
-                record = self.runs.update(
-                    run_id, state=RunState.SUCCEEDED, finished_at=time.time(), artifacts=artifacts
-                )
-            else:
-                # A failed run's outputs go to object storage too. Whatever it
-                # managed to write — an emergency adapter, the reports, the
-                # partial exports — is all it has to show for the GPU time, and
-                # a local disk is not where that should be left.
-                artifacts = self._publish_partial(record, plan)
-                record = self.runs.update(
-                    run_id,
-                    state=RunState.FAILED,
-                    finished_at=time.time(),
-                    error=f"The training script exited {record.exit_code}.",
-                    artifacts=artifacts,
-                )
+            if record.state is not RunState.CANCELLED:
+                record = self.runs.update(run_id, state=RunState.PUBLISHING)
+                if record.exit_code == 0:
+                    artifacts = self._publish_outputs(record, plan)
+                    record = self.runs.update(
+                        run_id, state=RunState.SUCCEEDED, finished_at=time.time(), artifacts=artifacts
+                    )
+                else:
+                    # A failed run's outputs go to object storage too. Whatever it
+                    # managed to write — an emergency adapter, the reports, the
+                    # partial exports — is all it has to show for the GPU time, and
+                    # a local disk is not where that should be left.
+                    artifacts = self._publish_partial(record, plan)
+                    record = self.runs.update(
+                        run_id,
+                        state=RunState.FAILED,
+                        finished_at=time.time(),
+                        error=f"The training script exited {record.exit_code}.",
+                        artifacts=artifacts,
+                    )
+            # A cancelled run keeps its checkpoints too, and its record and
+            # experiment folder are published below like any other's.
             record = self._settle_checkpoints(record, plan)
         except NawatError as exc:
             record = self._fail(run_id, f"{exc.cause} {exc.remedy or ''}".strip())
@@ -395,6 +364,11 @@ class Executor:
         return self.runs.update(run_id, state=RunState.FAILED, finished_at=finished, error=error)
 
     def _run_process(self, record: RunRecord, plan: Plan) -> RunRecord:
+        if self._cancel_requested(record.id):
+            # Cancelled while the inputs were staging: the trainer never starts.
+            return self.runs.update(
+                record.id, state=RunState.CANCELLED, finished_at=time.time(), error="Cancelled before it started."
+            )
         log_path = self.runs.log_path(record.id)
         env = self.environment(record, plan)
         with log_path.open("ab", buffering=0) as log:
@@ -470,32 +444,6 @@ class Executor:
     def _publish_record(self, record: RunRecord) -> None:
         publish_record(self.cache, self.runs, record.id, record.publish_prefix)
 
-    # -- naming ------------------------------------------------------------
-
-    def _name_run(self, record: RunRecord) -> RunRecord:
-        """Let the researcher name the run before its artifacts are uploaded.
-
-        Asked at the end rather than the beginning, because that is when there
-        is something to say about it. It is only ever a prompt on an interactive
-        submit: a queued run, an API run, or a shell with no terminal keeps the
-        generated id rather than blocking on an answer nobody is there to give.
-        """
-        if record.name or self.ask_name is None:
-            return record
-        try:
-            chosen = self.ask_name(record)
-        except Exception:  # noqa: BLE001 - naming is a convenience, never a failure
-            return record
-        if not chosen:
-            return record
-        try:
-            named = self.runs.update(record.id, name=chosen)
-        except NawatError as exc:
-            self._log(record.id, f"could not use that name: {exc.cause}")
-            return record
-        self._log(record.id, f"named {named.name} — artifacts publish under runs/{named.publish_prefix}")
-        return named
-
     # -- checkpoints -------------------------------------------------------
 
     def _settle_checkpoints(self, record: RunRecord, plan: Plan | None) -> RunRecord:
@@ -530,7 +478,7 @@ class Executor:
             log=lambda message: self._log(record.id, message),
         )
         if newest is not None and not succeeded:
-            self._log(record.id, f"resume it with: nawat resume {record.id}")
+            self._log(record.id, f"run the experiment again to continue from it: nawat exp run {record.name or '<experiment>'}")
         return self.runs.update(
             record.id,
             checkpoint=str(newest.path) if newest else None,
@@ -541,9 +489,7 @@ class Executor:
         """Copy the run's last checkpoint into object storage.
 
         The local copy is untouched, so resuming a failed run still reads from
-        the lineage on disk rather than pulling gigabytes back down. Turn it off
-        with ``--no-publish-checkpoints`` when the upload costs more than the
-        insurance is worth.
+        the lineage on disk rather than pulling gigabytes back down.
         """
         key = Key.parse(f"runs/{record.publish_prefix}/{CHECKPOINT_CLASS}")
         self._log(record.id, f"replicating {checkpoint.name} ({human_bytes(checkpoint.bytes)}) to {key}")
@@ -595,9 +541,6 @@ class Executor:
     def _cancel_requested(self, run_id: str) -> bool:
         return self._cancel_path(run_id).exists()
 
-    def _clear_cancel(self, run_id: str) -> None:
-        self._cancel_path(run_id).unlink(missing_ok=True)
-
 
 class RunQueue:
     """Serial execution. The host has one GPU, so runs wait their turn (FR-2.12)."""
@@ -644,5 +587,9 @@ class RunQueue:
             self._idle.clear()
             try:
                 self.executor.execute(record.id)
-            except Exception:  # noqa: BLE001 - one bad run must not stop the queue
-                pass
+            except Exception as exc:  # noqa: BLE001 - one bad run must not stop the queue
+                current = self.runs.find(record.id)
+                if current is not None and not current.state.terminal:
+                    # Otherwise the same record is picked up again on the next poll, forever.
+                    self.runs.update(record.id, state=RunState.FAILED, finished_at=time.time(),
+                                     error=f"{type(exc).__name__}: {exc}")

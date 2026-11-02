@@ -11,8 +11,10 @@ A Docker container with:
   to the same bucket;
 - **OpenCode** (opencode.ai) installed, with ``AGENTS.md`` telling it the rules.
 
-What it cannot do: approve an experiment (approval needs the host), or delete
-from object storage. It prepares plans; a person approves them.
+What it cannot do: approve an experiment (approval needs the host), start one
+on its own (the host checks the approval's signature, then launches the run
+inside), or delete from object storage. It prepares plans; a person approves
+and starts them.
 
 Optional, like every block: an experiment runs in it only when its preset sets
 ``runtime = "sandbox"``.
@@ -100,17 +102,23 @@ executor runs only approved experiments, `nawat.begin_run()` refuses, and
    parameters (`nawat preset show <name>`) and ask which to change, especially
    learning rate, steps, batch size, LoRA rank, max lengths and the dataset's
    columns and processing.
-6. Plan: `nawat exp plan <preset> [--set ...]`. This prints every parameter and
-   an approval code. **You cannot approve.** Tell the user to run
-   `nawat exp approve <experiment>` on the host, and wait.
-7. Run after approval: `nawat exp run <experiment>`.
+6. Plan: `nawat exp plan <preset> --use runtime=sandbox [--set ...]`. This
+   prints every parameter and an approval code. **You cannot approve, and you
+   cannot start the run**: this sandbox has no key to check an approval with.
+   Tell the user to run, on the host, `nawat exp approve <experiment>` and then
+   `nawat exp run <experiment>` — the second checks the approval and starts the
+   run inside this sandbox. Wait for it.
+7. Follow it from here: `nawat exp logs <experiment> -f`,
+   `nawat exp metrics <experiment>`.
 8. Read results: `nawat exp report <experiment>`, `nawat exp compare A B`,
    `nawat exp traces <experiment>`. Reports are plain text written for you.
 
 ## Not allowed
 
-- approving experiments, deleting from object storage (`nawat store rm`),
-  editing files under `lab/experiments/*/code/`, or editing locked blocks;
+- approving experiments, or writing an `approval.json` by hand — it is refused
+  here, and shows as `forged` in every report read on the host;
+- deleting from object storage (`nawat store rm`), editing files under
+  `lab/experiments/*/code/`, or editing locked blocks;
 - training outside an experiment (a script of your own, a notebook, a direct
   Unsloth/TRL call) — its results are not recorded, and do not count.
 """
@@ -208,8 +216,11 @@ def running(name: str = CONTAINER) -> bool:
     return out.returncode == 0 and out.stdout.strip() == "true"
 
 
-def exec_args(name: str, command: list[str], *, interactive: bool, workdir: str = "/workspace") -> list[str]:
+def exec_args(name: str, command: list[str], *, interactive: bool, workdir: str = "/workspace",
+              env: dict[str, str] | None = None) -> list[str]:
     flags = ["-it"] if interactive else ["-i"]
+    for key, value in (env or {}).items():
+        flags += ["-e", f"{key}={value}"]
     return [docker(), "exec", *flags, "-w", workdir, name, *command]
 
 

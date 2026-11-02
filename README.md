@@ -246,11 +246,16 @@ uv pip install "torch==2.8.0" "triton>=3.3.0" numpy pillow torchvision \
 uv pip install --no-deps "torchcodec==0.7.0"
 uv pip install --upgrade --no-deps \
   "tokenizers>=0.22.0,<=0.23.0" trl==0.22.2 unsloth unsloth_zoo
-uv pip install transformers==5.2.0
+uv pip install transformers==5.2.0 sentence-transformers snac torchaudio
 uv pip install --no-build-isolation \
   flash-linear-attention "causal_conv1d==1.6.0"
 uv pip install --no-deps --upgrade "torchao>=0.16.0"
 ```
+
+`sentence-transformers`, `snac` and `torchaudio` are what the embedding, TTS and
+STT backbones import; the text and vision presets do not use them. This is the
+same list the sandbox image installs (`nawat sandbox dockerfile` prints it), and
+a test keeps the two in step.
 
 For GRPO / DAPO with fast generation inside training (`model.fast_inference=true`,
 as the Unsloth GRPO notebooks use), add vLLM to the same environment. Pin 0.11.0:
@@ -820,8 +825,8 @@ NAWAT_CACHE_ROOT       Nawāt-managed working set
 S3-compatible store   durable source of truth
 ```
 
-A small Hugging Face cache does not interfere with Nawāt. Submitted training
-runs use the staged Nawāt paths and run with hub access disabled. Inspect both:
+A small Hugging Face cache does not interfere with Nawāt. Experiments train
+from the staged Nawāt paths with hub access disabled. Inspect both:
 
 ```bash
 du -sh ~/.cache/huggingface 2>/dev/null
@@ -914,10 +919,12 @@ mkdir -p ~/nawat/workspace
 
 Do not recursively delete a real workspace containing research files.
 
-### Training exits 0 but `.env` was not found
+### The experiment trained but publishing failed
 
-Training succeeded but final publication failed because the workspace was
-outside the `.env` search tree.
+The run log ends in a storage error — typically because the workspace was
+outside the `.env` search tree, so the trainer ran but the upload had no
+endpoint or credentials. The attempt is recorded as failed and its last
+checkpoint is kept.
 
 ```bash
 ln -s /absolute/path/to/nawat/.env ~/nawat/.env
@@ -926,26 +933,23 @@ nawat config
 nawat check
 ```
 
-The adapter normally remains under the cache root shown by `nawat config`:
+Then run the experiment again. It continues from its last checkpoint, publishes
+when it finishes, and the failed attempt stays in the record beside the new one:
 
 ```bash
-nawat publish \
-  "<cache-root>/runs/<id>/adapter" \
-  runs/<id>/adapter
+nawat exp run <group>/<name>
 ```
-
-The historical record remains failed because publication failed at that time,
-but the recovered adapter key is valid. Run another three-step smoke test for a
-clean `succeeded` record.
 
 ### Out of memory
 
-Try these in order:
+Every one of these is a parameter of the experiment, so it is a `--set` on
+`nawat exp plan`, never an edit to code. Try them in order:
 
-1. Set `per_device_train_batch_size=1` in the training script.
-2. Reduce `max_length` from 2048.
-3. Keep `use_gradient_checkpointing="unsloth"` enabled.
-4. Use Qwen3.5-0.8B or 2B instead of 4B.
+1. `--set train.per_device_train_batch_size=1`, raising
+   `train.gradient_accumulation_steps` to keep the effective batch.
+2. `--set model.max_seq_length=1024` instead of 2048.
+3. Leave gradient checkpointing on — the model blocks default to Unsloth's.
+4. `--set model.load_in_4bit=true`, or a smaller base with `--model`.
 5. Stop any inference session with `nawat session --stop`.
 
 ## CLI help
@@ -1009,6 +1013,9 @@ Local files are reclaimed only when:
 Training is gated: only an experiment approved by a person at a terminal runs,
 the approval is signed with a key the sandbox never sees, and it covers the
 exact code and every parameter — change either and it has to be approved again.
+A run inside the sandbox is started from the host, which checks that signature
+before launching it; the sandbox cannot verify one, so it refuses to start a
+run on its own.
 
 Run records, logs, and metrics are durable provenance rather than disposable
 cache. A failed run publishes what it produced rather than discarding it — the
@@ -1023,7 +1030,7 @@ removed when a run succeeds, or when you ask.
 
 ```bash
 uv sync --all-extras          # every optional dependency, plus the dev group
-uv run pyflakes nawat         # lint
+uv run pyflakes nawat tests   # lint, as CI does
 uv run nawat check            # exercise the real storage path
 uv build                      # wheel and sdist into dist/
 ```
