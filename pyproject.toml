@@ -1,6 +1,6 @@
 [project]
 name = "nawat"
-version = "0.2.0"
+version = "0.3.0b1"
 description = "Fine-tune on a small disk as if it were a big one — object-storage-backed cache, runs and serving for Unsloth"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -61,7 +61,7 @@ packages = ["nawat"]
 [tool.hatch.build.targets.sdist]
 # The logo and the social preview are 2.5 MB of images that render from the
 # repository and from nowhere else — a source distribution is not a web page.
-exclude = [".github", "docs", "unsloth_compiled_cache"]
+exclude = [".github", "docs", "unsloth_compiled_cache", ".venv*", "dist"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

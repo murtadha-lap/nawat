@@ -22,7 +22,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import metrics
+from . import __version__, metrics
 from .cache import Cache, open_cache
 from .config import Config
 from . import checkpoints as checkpoint_store
@@ -122,7 +122,7 @@ def create_app(
 
     app = FastAPI(
         title="Nawāt",
-        version="0.2.0",
+        version=__version__,
         summary="Storage and orchestration core for a storage-constrained GPU host",
         lifespan=lifespan,
     )
