@@ -8,6 +8,7 @@
 
 <p>
   <a href="https://github.com/murtadha-lap/nawat"><img alt="Repository" src="https://img.shields.io/badge/GitHub-murtadha--lap%2Fnawat-181717?logo=github"></a>
+  <a href="https://github.com/murtadha-lap/nawat/releases"><img alt="Release" src="https://img.shields.io/github/v/release/murtadha-lap/nawat?include_prereleases&label=release&color=F59E0B"></a>
   <a href="LICENSE"><img alt="License: PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-16a34a"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Platform: Linux" src="https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&logoColor=black">
@@ -33,7 +34,8 @@
   <a href="docs/lab.md"><strong>Lab guide</strong></a> ·
   <a href="#inference-with-nawāt-and-vllm"><strong>Run with vLLM</strong></a> ·
   <a href="#local-storage-operations"><strong>Manage storage</strong></a> ·
-  <a href="#troubleshooting"><strong>Troubleshooting</strong></a>
+  <a href="#troubleshooting"><strong>Troubleshooting</strong></a> ·
+  <a href="CHANGELOG.md"><strong>Changelog</strong></a>
 </p>
 
 </div>
@@ -52,6 +54,12 @@ vLLM inference.
 
 > The Python package and CLI command are `nawat`. **Nawāt** (نواة) means
 > “nucleus”—the small core coordinating the research workflow.
+
+> **Status: beta.** The platform around training — planning, approval, the
+> gate, traces, evals, comparison, sweeps, storage and publishing — is complete
+> and covered by CPU-only tests in CI. Text SFT has trained on a GPU; the other
+> methods have not yet run on one end to end. The
+> [changelog](CHANGELOG.md) lists what each release verified.
 
 ## The research problem
 
@@ -199,7 +207,7 @@ files. Use `uv run nawat COMMAND --help`, for example `uv run nawat resolve
 | Command | What it does |
 | --- | --- |
 | `uv sync` | Build `.venv` from `uv.lock`, exactly |
-| `uv sync --extra notebook` | Add `huggingface_hub` and `matplotlib` for notebook work |
+| `uv sync --extra notebook` | Add JupyterLab, `huggingface_hub` and `matplotlib` for `nawat jupyter` |
 | `uv sync --extra api` | Add FastAPI and Uvicorn for the control plane |
 | `uv run nawat ...` | Run the CLI in the project environment |
 | `uv add PACKAGE` | Add a dependency and update the lockfile |
@@ -273,8 +281,9 @@ For Ampere or newer GPUs:
 uv pip install --no-deps "apache-tvm-ffi==0.1.9" "tilelang==0.1.8"
 ```
 
-On an older GPU such as a T4, skip TileLang and set `FLA_TILELANG=0` before
-importing Unsloth. The included notebook preflight handles this automatically.
+On an older GPU such as a T4, skip TileLang and set `FLA_TILELANG=0` in the
+environment before `nawat exp run`; it reaches the trainer like any other
+variable.
 
 > **Keep the two worlds from fighting.** `uv pip install` puts packages in the
 > environment without touching `uv.lock`, which is what you want here — but a
