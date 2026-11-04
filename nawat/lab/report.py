@@ -15,9 +15,11 @@ says why it will not, unless told to show them anyway, marked.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..metrics import read_points
+from ..process import process_alive
 from .experiment import Experiment
 from .params import format_value
 from .trace import read as read_traces
@@ -32,8 +34,9 @@ KEY_FIELDS = ("loss", "eval_loss", "grad_norm", "learning_rate", "reward", "rewa
 # -- one experiment -----------------------------------------------------------
 
 
-def attempt_records(experiment: Experiment) -> list[dict[str, Any]]:
+def attempt_records(experiment: Experiment, config=None) -> list[dict[str, Any]]:
     out = []
+    live_config = None
     for run_id in experiment.attempts():
         path = experiment.path("attempts", run_id, "record.json")
         if path.is_file():
@@ -42,17 +45,42 @@ def attempt_records(experiment: Experiment) -> list[dict[str, Any]]:
                 continue
             except ValueError:
                 pass
-        out.append({"id": run_id, "state": "unknown"})
+        # No record yet: the run is live, or it stopped before finishing. Ask the run store which.
+        live_config = live_config or _config(config)
+        out.append(_live_record(run_id, live_config) or {"id": run_id, "state": "unknown"})
     return out
 
 
-def latest_attempt(experiment: Experiment) -> dict[str, Any] | None:
-    records = attempt_records(experiment)
+def _live_record(run_id: str, config) -> dict[str, Any] | None:
+    """The run store's record of an attempt that has not been finalised yet, if this host knows the run.
+
+    ``record.json`` is only written once a run ends, but the run store keeps
+    ``<state_dir>/runs/<id>/run.json`` current through every state change. A run
+    that says it is running but whose trainer process is gone was stopped without
+    the platform noticing, and is reported as interrupted.
+    """
+    if config is None:
+        return None
+    path = Path(config.state_dir) / "runs" / run_id / "run.json"  # RunStore's record_path
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(record, dict) or record.get("id") != run_id:
+        return None
+    pid = record.get("pid")
+    if record.get("state") == "running" and record.get("exit_code") is None and pid and not process_alive(pid):
+        record["state"] = "interrupted"
+    return record
+
+
+def latest_attempt(experiment: Experiment, config=None) -> dict[str, Any] | None:
+    records = attempt_records(experiment, config)
     return records[-1] if records else None
 
 
-def status(experiment: Experiment) -> str:
-    last = latest_attempt(experiment)
+def status(experiment: Experiment, config=None) -> str:
+    last = latest_attempt(experiment, config)
     if last is not None:
         state = str(last.get("state", "unknown"))
         return "interrupted" if state == "unknown" else state  # stopped before its record was written
@@ -150,7 +178,8 @@ def build(experiment: Experiment, config=None) -> dict[str, Any]:
     d = experiment.data
     points = metric_points(experiment)
     series = summarise_series(points)
-    attempts = attempt_records(experiment)
+    config = _config(config)
+    attempts = attempt_records(experiment, config)
     last = attempts[-1] if attempts else {}
     result = {}
     if last.get("id"):
@@ -165,7 +194,7 @@ def build(experiment: Experiment, config=None) -> dict[str, Any]:
         "name": d["name"],
         "group": d.get("group"),
         "sweep": d.get("sweep"),
-        "status": status(experiment),
+        "status": status(experiment, config),
         "notes": d.get("notes", ""),
         "plan_code": experiment.code,
         "plan_hash": d["plan_hash"],
@@ -189,16 +218,24 @@ def build(experiment: Experiment, config=None) -> dict[str, Any]:
     }
 
 
+def _config(config):
+    """The given config, or the one from the environment; None when there is none to be had."""
+    if config is not None:
+        return config
+    try:
+        from ..config import Config
+
+        return Config.from_env()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _approval_state(experiment: Experiment, config) -> str:
     from .experiment import approval_state
 
+    config = _config(config)
     if config is None:
-        try:
-            from ..config import Config
-
-            config = Config.from_env()
-        except Exception:  # noqa: BLE001
-            return "unknown"
+        return "unknown"
     return approval_state(config, experiment.approval)
 
 
@@ -297,9 +334,10 @@ def _differs(values: Sequence[Any]) -> bool:
     return any(json.dumps(v, sort_keys=True, default=str) != first for v in values[1:])
 
 
-def compare(experiments: Sequence[Experiment], *, show_all: bool = False, force: bool = False) -> dict[str, Any]:
+def compare(experiments: Sequence[Experiment], *, show_all: bool = False, force: bool = False, config=None) -> dict[str, Any]:
     """What differs between experiments, and their results side by side where that is fair."""
-    reports = [build(e) for e in experiments]
+    config = _config(config)
+    reports = [build(e, config) for e in experiments]
     names = [r["name"] for r in reports]
     setup: list[tuple[str, list[Any]]] = []
 

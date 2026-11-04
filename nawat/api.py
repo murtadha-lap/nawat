@@ -303,7 +303,7 @@ def create_app(
         from .lab import report as lab_report
         from .lab.experiment import list_experiments as all_experiments
 
-        return [{"name": e.name, "status": lab_report.status(e), "preset": e.data["preset"]["name"],
+        return [{"name": e.name, "status": lab_report.status(e, platform.config), "preset": e.data["preset"]["name"],
                  "backbone": e.data["backbone"]["name"], "created_at": e.data.get("created_at")}
                 for e in all_experiments(platform.config)]
 

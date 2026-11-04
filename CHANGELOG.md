@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `nawat exp report`, `exp ls` and `sweep ls` showed an experiment that was
+  still training as "interrupted" (#8). An attempt without a run record now
+  takes its state from the run store — queued, staging, running, publishing —
+  and is "interrupted" only when the run store does not know it, or its trainer
+  process is gone.
+
 Fixes from a review of 0.3.0b1. Each has a regression test in
 `tests/test_regressions.py`.
 
