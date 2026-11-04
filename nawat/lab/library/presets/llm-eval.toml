@@ -1,0 +1,16 @@
+# No training: score a model as stored on general benchmarks — a base model for a baseline, or a
+# finished run (runs/<group>/<experiment>/adapter) to see what fine-tuning cost. Plan one experiment
+# per model from this preset (or a fork of it), changing only --model, so the evals compare.
+# enable_thinking = false makes Qwen3's generation prompt ask for a direct answer; set the same in
+# the training runs you compare with. Other chat templates ignore it.
+[preset]
+backbone    = "eval-only"
+description = "Benchmarks on a model as stored, no training (baselines, catastrophic forgetting)"
+model       = "models/unsloth/Qwen3-4B"
+
+[blocks]
+model = "llm-lora"
+eval  = ["mmlu", "arc-challenge", "truthfulqa-mc1", "gsm8k"]
+
+[params.model]
+chat_template_kwargs = { enable_thinking = false }

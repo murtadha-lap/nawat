@@ -422,7 +422,8 @@ def plan_experiment(
             "notes": notes,
             "preset": {"name": preset.name, "source": preset.source, "sha256": preset.sha256, "parent": preset.parent,
                        "description": preset.description},
-            "backbone": {**snapshot(backbone, "backbone"), "config_class": backbone.meta.get("config_class")},
+            "backbone": {**snapshot(backbone, "backbone"), "config_class": backbone.meta.get("config_class"),
+                         "trains": bool(backbone.meta.get("trains", True))},
             "blocks": blocks,
             "params": params,
             "param_sources": sources,
@@ -459,12 +460,19 @@ def eval_fingerprints(data: Mapping[str, Any], plans: list[SlotPlan]) -> dict[st
     experiments trained on the same data split the same way.
     """
     dataset = next((p for p in plans if p.slot == "dataset"), None)
+    model = next((p for p in plans if p.slot == "model"), None)
+    # The prompt a generation eval sends is the chat template's output, so variables given to the
+    # template (Qwen3's enable_thinking) change the measurement. Counted only when set, so that
+    # experiments that set none still compare with each other as before.
+    template_kwargs = (model.params.values.get("chat_template_kwargs") if model is not None else None) or None
     out = {}
     for plan in plans:
         if plan.slot != "eval":
             continue
         material: dict[str, Any] = {"block": [plan.block.name, plan.block.sha256], "params": plan.params.values,
                                     "support": (data.get("support") or {}).get("sha256")}
+        if template_kwargs:
+            material["chat_template_kwargs"] = template_kwargs
         module = load_module(plan.block.path, plan.block.ref)
         declare = getattr(module, "inputs", None)
         if callable(declare):
@@ -603,6 +611,7 @@ def render_plan(experiment: Experiment, defaults: Mapping[str, Any] | None = Non
         "",
         f"- **Preset:** {d['preset']['name']} ({d['preset']['source']})" + (f" — {d['preset']['description']}" if d['preset'].get('description') else ""),
         f"- **Backbone:** {d['backbone']['name']} — {d['backbone'].get('summary', '')}",
+        *([] if d["backbone"].get("trains", True) else ["- **Training:** none — the model is evaluated as stored"]),
         f"- **Model:** {d['inputs']['model'] or '—'}",
         f"- **Datasets:** {', '.join(d['inputs']['datasets']) or '—'}",
     ]

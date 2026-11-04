@@ -192,16 +192,23 @@ def generate(ctx, model, tokenizer, items: list[dict[str, Any]], **settings) -> 
     return ctx.block("model").call(ctx, "generate", model, tokenizer, items, **settings)
 
 
-def render_prompt(tokenizer, value: Any) -> tuple[str, bool]:
-    """(text, came_from_chat_template). Messages go through the chat template."""
+def render_prompt(tokenizer, value: Any, chat_template_kwargs: dict[str, Any] | None = None) -> tuple[str, bool]:
+    """(text, came_from_chat_template). Messages go through the chat template.
+
+    ``chat_template_kwargs`` are extra variables for the template — for Qwen3,
+    ``{"enable_thinking": False}`` makes the generation prompt ask for a direct
+    answer. They come from the model block's parameter of the same name, so the
+    plan shows them and the eval fingerprints count them.
+    """
     if isinstance(value, list):
-        text = tokenizer.apply_chat_template(value, tokenize=False, add_generation_prompt=True)
+        text = tokenizer.apply_chat_template(value, tokenize=False, add_generation_prompt=True,
+                                             **dict(chat_template_kwargs or {}))
         return text, True
     return str(value), False
 
 
 def causal_generate(model, tokenizer, items, *, max_new_tokens: int, temperature: float, top_p: float = 1.0,
-                    batch_size: int = 8) -> list[str]:
+                    batch_size: int = 8, chat_template_kwargs: dict[str, Any] | None = None) -> list[str]:
     """Left-padded batched generation for a causal language model."""
     import torch
 
@@ -214,7 +221,7 @@ def causal_generate(model, tokenizer, items, *, max_new_tokens: int, temperature
     try:
         for start in range(0, len(items), batch_size):
             batch = items[start:start + batch_size]
-            rendered = [render_prompt(tokenizer, item["input"]) for item in batch]
+            rendered = [render_prompt(tokenizer, item["input"], chat_template_kwargs) for item in batch]
             encoded = tok([text for text, _ in rendered], return_tensors="pt", padding=True,
                           add_special_tokens=not rendered[0][1]).to(model.device)
             kwargs: dict[str, Any] = {"max_new_tokens": max_new_tokens, "pad_token_id": tok.pad_token_id, "use_cache": True}

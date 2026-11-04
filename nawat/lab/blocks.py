@@ -147,6 +147,8 @@ class Block:
 
     def fits(self, backbone: "str | Block") -> bool:
         wanted = self.meta.get("backbones")
+        if isinstance(backbone, Block) and backbone.meta.get("any_family"):
+            return True  # a backbone that only loads, evaluates and exports takes blocks written for any method
         names = {backbone.name, backbone.family} if isinstance(backbone, Block) else {backbone}
         return not wanted or bool(names & set(wanted))
 

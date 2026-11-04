@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Evaluate a model without training it (#9): the `eval-only` backbone and the
+  `llm-eval` preset load a model — a base model, or a finished run's
+  `runs/<group>/<experiment>/adapter` — and run every eval block without an
+  optimizer step. Its plan and report say "Training: none". Dataset and
+  template blocks of any training method fit it.
+- `model.chat_template_kwargs` (`llm-lora`, `vlm-lora`) passes variables to the
+  chat template for generation prompts, e.g. Qwen3's `enable_thinking=false`,
+  so base and fine-tuned models answer under the same prompt. When set, it is
+  part of every eval fingerprint.
+
 - Runs take turns on the one GPU (#10). Every run holds a GPU lock (a file
   lock in the workspace, shared with the sandbox) from staging to its last
   upload, and runs start in the order they were submitted. A plain

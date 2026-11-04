@@ -27,6 +27,8 @@ PARAMS = {
     "use_gradient_checkpointing": P("unsloth", "true, false or \"unsloth\" (long context)", type=str),
     "random_state": P(3407, "Seed for adapter initialisation"),
     "use_rslora": P(False, "Rank-stabilised LoRA (the CPT notebook uses true)"),
+    "chat_template_kwargs": P({}, "Extra chat-template variables for generation prompts, e.g. {enable_thinking = false} "
+                              "for Qwen3 to answer without a <think> block", type=dict),
 }
 
 
@@ -97,7 +99,8 @@ def generate(ctx, p, model, tokenizer, items, max_new_tokens=256, temperature=0.
     FastLanguageModel.for_inference(model)
     try:
         return support.causal_generate(model, tokenizer, items, max_new_tokens=max_new_tokens,
-                                       temperature=temperature, top_p=top_p, batch_size=batch_size)
+                                       temperature=temperature, top_p=top_p, batch_size=batch_size,
+                                       chat_template_kwargs=p.chat_template_kwargs)
     finally:
         FastLanguageModel.for_training(model)
 
