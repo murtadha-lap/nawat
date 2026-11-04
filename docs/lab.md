@@ -256,8 +256,30 @@ nawat exp report --compare A B C   # one text for an agent: shared setup, differ
 nawat sweep plan llm-grpo --model models/unsloth/Qwen3-4B-Base,models/unsloth/Qwen3-1.7B-Base \
     --vary train.learning_rate=1e-6,5e-6
 nawat exp approve <sweep-id>       # one approval for the whole grid
-nawat sweep run <sweep-id>         # one after another (or --queue)
+nawat sweep run <sweep-id>         # one after another (or --queue: all queued, and return)
 ```
+
+## One GPU: the queue
+
+Runs take turns on the GPU, whichever way they were started: a run holds the
+GPU from staging to its last upload, and the next one starts when it is done,
+in the order they were submitted. Runs in the sandbox take turns with runs on
+the host. A run that is waiting is `queued`.
+
+```bash
+nawat exp run A                    # GPU busy: waits here, streaming "waiting for run … — 1 ahead", then runs
+nawat exp run B --queue            # queue it and return; it runs without this terminal
+nawat exp approve C --queue        # approve and queue in one step (a sweep id queues every experiment)
+nawat exp queue                    # what is on the GPU, what waits, in order, with estimated start times
+nawat exp cancel B                 # take a queued run out of the queue (or stop a running one)
+```
+
+Ctrl-C while `nawat exp run` waits takes the run out of the queue. A run queued
+with `--queue` does not need `nawat api`: when the control plane is not running,
+a small worker (`nawat exp queue --work`, started for you, logging to
+`<state_dir>/queue-worker.log`) runs the queued runs one after another and stops
+when none are left. An experiment can have only one attempt queued or running
+at a time.
 
 ## Controlling object storage
 

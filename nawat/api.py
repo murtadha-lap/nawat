@@ -26,7 +26,7 @@ from . import __version__, metrics
 from .cache import Cache, open_cache
 from .config import Config
 from . import checkpoints as checkpoint_store
-from .errors import NawatError
+from .errors import NawatError, Protected
 from .executor import Executor, RunQueue
 from .gpu import gpu_info
 from .health import run_checks
@@ -317,10 +317,14 @@ def create_app(
     @app.post("/experiments/{name:path}/run", status_code=201, dependencies=guard)
     def run_experiment(name: str) -> dict[str, Any]:
         """Queue an approved experiment. Approval itself is never possible over HTTP."""
-        from .lab.cli import experiment_spec
+        from .lab.cli import experiment_spec, pending_attempt
         from .lab.experiment import find
 
         experiment = find(platform.config, name)
+        pending = pending_attempt(platform.runs, experiment)
+        if pending is not None:
+            raise Protected(f"{experiment.name} already has run {pending.id}, which is {pending.state.value}.",
+                            "Let it finish, or cancel it first.")
         record = platform.queue.submit(experiment_spec(experiment), None, name=experiment.name)
         experiment.add_attempt(record.id)
         return record.to_json()

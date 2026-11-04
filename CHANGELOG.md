@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Runs take turns on the one GPU (#10). Every run holds a GPU lock (a file
+  lock in the workspace, shared with the sandbox) from staging to its last
+  upload, and runs start in the order they were submitted. A plain
+  `nawat exp run` waits as `queued` while the GPU is busy, saying in its log
+  what it waits for; Ctrl-C takes it out of the queue. `--queue` no longer
+  needs `nawat api`: a worker (`nawat exp queue --work`) is started when nothing
+  else serves the queue. New: `nawat exp approve --queue`, and `nawat exp queue`
+  to see the queue with estimated start times. `nawat exp cancel` takes a
+  queued run out of the queue. An experiment can have only one attempt queued
+  or running, and `nawat sweep run` skips experiments already queued or running.
+
 - `nawat exp report`, `exp ls` and `sweep ls` showed an experiment that was
   still training as "interrupted" (#8). An attempt without a run record now
   takes its state from the run store — queued, staging, running, publishing —

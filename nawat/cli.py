@@ -291,7 +291,28 @@ def _run_store(cache: Cache) -> RunStore:
 def _executor(cache: Cache):
     from .executor import Executor
 
-    return Executor(cache, _run_store(cache))
+    executor = Executor(cache, _run_store(cache))
+    executor.on_stalled = lambda: start_queue_worker(cache.config)
+    return executor
+
+
+def start_queue_worker(config) -> bool:
+    """Start ``nawat exp queue --work`` in the background, unless something already serves the queue.
+
+    That is the control plane's queue thread when ``nawat api`` is up, or a
+    worker started earlier; the worker lock tells. The worker runs the queued
+    runs one after another and exits when none are left. Its own output goes to
+    ``<state_dir>/queue-worker.log``; each run's goes to its run log, as always.
+    """
+    from . import gpulock
+
+    if gpulock.is_held(gpulock.worker_lock_path(config)):
+        return False
+    config.state_dir.mkdir(parents=True, exist_ok=True)
+    with open(config.state_dir / "queue-worker.log", "ab") as log:
+        subprocess.Popen([sys.executable, "-m", "nawat.cli", "exp", "queue", "--work"], stdin=subprocess.DEVNULL,
+                         stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=os.environ.copy())
+    return True
 
 
 def _launch(executor, record, *, queue: bool) -> int:
@@ -302,7 +323,16 @@ def _launch(executor, record, *, queue: bool) -> int:
     running with nobody left to publish what it makes.
     """
     if queue:
-        print(f"Queued run {record.id}. It starts when the control plane reaches it.")
+        named = f" ({record.name})" if record.name else ""
+        from . import gpulock
+
+        busy = gpulock.is_held(gpulock.gpu_lock_path(executor.config))
+        ahead = len(executor.runs.queued_before(record)) + (1 if busy else 0)
+        print(f"Queued run {record.id}{named}" + (f", {ahead} ahead of it." if ahead else ", next to run.")
+              + " It starts when the GPU is free; it does not need this terminal.")
+        if start_queue_worker(executor.config):
+            print("Started the queue worker, which runs queued runs one after another and stops when none are left.")
+        print(f"See the queue: {PROGRAM} exp queue" + (f"    Follow it: {PROGRAM} exp logs -f {record.name}" if record.name else ""))
         return 0
 
     _err(f"run {record.id}  {record.spec.script}")
@@ -320,13 +350,20 @@ def _launch(executor, record, *, queue: bool) -> int:
             sys.stdout.write(chunk)
             sys.stdout.flush()
     except KeyboardInterrupt:
-        _err(f"\nInterrupted — cancelling run {record.id}; its checkpoints are kept.")
+        waiting = executor.runs.get(record.id).state is RunState.QUEUED
+        if waiting:
+            _err(f"\nInterrupted — taking run {record.id} out of the queue; it had not started.")
+        else:
+            _err(f"\nInterrupted — cancelling run {record.id}; its checkpoints are kept.")
         try:
             executor.cancel(record.id)
         except NawatError as exc:
             _err(f"{PROGRAM}: {exc}")
         worker.join()
         final = executor.runs.get(record.id)
+        if waiting and final.started_at is None:
+            _err(f"run {final.id} {final.state.value}. Run it later with: {PROGRAM} exp run {final.name or '<experiment>'}")
+            return 130
         _err(f"run {final.id} {final.state.value}. Run the experiment again to continue from its last checkpoint:"
              f" {PROGRAM} exp run {final.name or '<experiment>'}")
         return 130

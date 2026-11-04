@@ -32,8 +32,10 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from . import checkpoints as checkpoint_store
+from . import gpulock
 from .cache import Cache
 from .errors import InvalidKey, NawatError, NotFound, Protected
 from .keys import Key
@@ -152,10 +154,17 @@ def prune_empty(directory: Path) -> None:
 class Executor:
     """Runs one job at a time, start to finish."""
 
+    #: Seconds between looks at the queue while a run waits for its turn.
+    poll = 1.0
+
     def __init__(self, cache: Cache, runs: RunStore) -> None:
         self.cache = cache
         self.runs = runs
         self.config = cache.config
+        #: Called when a run waits behind runs handed to the queue that nothing is
+        #: serving — the CLI starts the queue worker. None: nothing is started.
+        self.on_stalled: Callable[[], None] | None = None
+        self._stalled_at = 0.0
 
     # -- validation --------------------------------------------------------
 
@@ -297,6 +306,16 @@ class Executor:
         record = self.runs.get(run_id)
         if record.state.terminal:
             raise Protected(f"Run {run_id} has already finished.", "Run the experiment again to start a new attempt.")
+        gpu = self.wait_for_turn(run_id)
+        if gpu is None:  # cancelled while it waited; it never started, so there is nothing to publish
+            return self.runs.get(run_id)
+        try:
+            return self._execute(run_id)
+        finally:
+            gpu.release()
+
+    def _execute(self, run_id: str) -> RunRecord:
+        record = self.runs.get(run_id)
         leases: list[LeaseRecord] = []
         plan: Plan | None = None
         try:
@@ -346,6 +365,79 @@ class Executor:
         self._publish_record(record)
         self._finalize_experiment(run_id)
         return self.runs.get(run_id)
+
+    # -- taking turns on the GPU ---------------------------------------------
+
+    def wait_for_turn(self, run_id: str) -> "gpulock.FileLock | None":
+        """Wait until this run is the oldest one queued and the GPU is free; then hold the GPU.
+
+        Every path that starts a run comes through here — a foreground
+        ``nawat exp run``, the control plane's queue, the local queue worker, the
+        sandbox — so no two runs share the GPU, and they start in the order they
+        were submitted. While it waits the run stays ``queued`` and says in its
+        log what it is waiting for. None if it was cancelled meanwhile.
+        """
+        said = None
+        while True:
+            record = self.runs.get(run_id)
+            if record.state.terminal:
+                return None
+            if self._cancel_requested(run_id):
+                self.runs.update(run_id, state=RunState.CANCELLED, finished_at=time.time(),
+                                 error="Cancelled before it started.")
+                return None
+            self.drop_abandoned()
+            ahead = self.runs.queued_before(record) if record.state is RunState.QUEUED else []
+            if not ahead:
+                gpu = gpulock.take_gpu(self.config, run_id=run_id, name=record.name)
+                if gpu is not None:
+                    return gpu  # a cancel that arrives from here on is caught before the trainer starts
+            message = self._waiting_message(ahead)
+            if message != said:
+                self._log(run_id, message)
+                said = message
+            if ahead:
+                self._nudge_queue(ahead)
+            time.sleep(self.poll)
+
+    def _waiting_message(self, ahead: list[RunRecord]) -> str:
+        holder = gpulock.gpu_holder(self.config)
+        if holder is not None:
+            who = f"run {holder.get('run') or '?'}" + (f" ({holder['name']})" if holder.get("name") else "")
+            if holder.get("where") == "sandbox" and not os.environ.get("NAWAT_SANDBOX"):
+                who += " in the sandbox"
+            return f"waiting for {who} to finish — {len(ahead) + 1} ahead in the queue"
+        if ahead:
+            first = ahead[0]
+            return (f"waiting for run {first.id}" + (f" ({first.name})" if first.name else "")
+                    + f" to start first — {len(ahead)} ahead in the queue")
+        return "waiting for the GPU"
+
+    def _nudge_queue(self, ahead: list[RunRecord]) -> None:
+        """Runs handed to the queue are ahead, and nothing serves the queue: have it served."""
+        if self.on_stalled is None or time.time() - self._stalled_at < 30:
+            return
+        if any(gpulock.owner_state(self.runs.directory(r.id)) == "queue" for r in ahead) \
+                and not gpulock.is_held(gpulock.worker_lock_path(self.config)):
+            self._stalled_at = time.time()
+            self.on_stalled()
+
+    def drop_abandoned(self) -> list[RunRecord]:
+        """Cancel queued runs whose terminal went away before they started.
+
+        Such a run was meant to run in the foreground, in front of its user; it
+        is not started behind their back, and it does not hold up the queue.
+        """
+        dropped = []
+        for record in self.runs.queued():
+            if gpulock.owner_state(self.runs.directory(record.id)) == "gone":
+                current = self.runs.find(record.id)
+                if current is not None and current.state is RunState.QUEUED:
+                    self._request_cancel(record.id)
+                    dropped.append(self.runs.update(
+                        record.id, state=RunState.CANCELLED, finished_at=time.time(),
+                        error="The terminal waiting to run it went away before it started."))
+        return dropped
 
     def _finalize_experiment(self, run_id: str) -> None:
         """When the script was an experiment's run.py, gather and publish the experiment folder."""
@@ -543,7 +635,15 @@ class Executor:
 
 
 class RunQueue:
-    """Serial execution. The host has one GPU, so runs wait their turn (FR-2.12)."""
+    """Serves the runs handed to the queue, one at a time (FR-2.12).
+
+    A run handed to the queue (``nawat exp run --queue``, the API) has nobody
+    waiting to run it, so something has to: the control plane's queue thread
+    while ``nawat api`` is up, otherwise the worker ``nawat exp queue --work``
+    that ``--queue`` starts. The worker lock lets only one of them serve. Runs a
+    terminal is waiting to run in the foreground are left to that terminal; all
+    of them take turns on the GPU in :meth:`Executor.wait_for_turn`.
+    """
 
     def __init__(self, executor: Executor, *, poll: float = 0.2) -> None:
         self.executor = executor
@@ -574,22 +674,52 @@ class RunQueue:
             self._thread = None
 
     def wait_idle(self, timeout: float | None = None) -> bool:
-        """Block until nothing is queued or running. For tests and shutdown."""
+        """Block until no run handed to the queue is waiting. For tests and shutdown."""
         return self._idle.wait(timeout)
 
-    def _serve(self) -> None:
-        while not self._stop.is_set():
-            record = self.runs.next_queued()
-            if record is None:
-                self._idle.set()
-                self._stop.wait(self.poll)
-                continue
-            self._idle.clear()
-            try:
-                self.executor.execute(record.id)
-            except Exception as exc:  # noqa: BLE001 - one bad run must not stop the queue
-                current = self.runs.find(record.id)
-                if current is not None and not current.state.terminal:
-                    # Otherwise the same record is picked up again on the next poll, forever.
-                    self.runs.update(record.id, state=RunState.FAILED, finished_at=time.time(),
-                                     error=f"{type(exc).__name__}: {exc}")
+    def next_run(self) -> RunRecord | None:
+        """The oldest queued run that was handed to the queue rather than to a terminal."""
+        self.executor.drop_abandoned()
+        for record in self.runs.queued():
+            if gpulock.owner_state(self.runs.directory(record.id)) == "queue":
+                return record
+        return None
+
+    def serve_until_empty(self) -> int:
+        """Serve the queue here until it has nothing left for it. How many runs it ran."""
+        return self._serve(until_empty=True)
+
+    def _serve(self, until_empty: bool = False) -> int:
+        served = 0
+        worker: gpulock.FileLock | None = None
+        try:
+            while not self._stop.is_set():
+                if worker is None:
+                    worker = gpulock.try_lock(gpulock.worker_lock_path(self.executor.config))
+                    if worker is None:  # another process serves the queue
+                        if until_empty:
+                            return served
+                        self._stop.wait(self.poll)
+                        continue
+                    worker.write({"pid": os.getpid(), "since": time.time()})
+                record = self.next_run()
+                if record is None:
+                    self._idle.set()
+                    if until_empty:
+                        return served
+                    self._stop.wait(self.poll)
+                    continue
+                self._idle.clear()
+                served += 1
+                try:
+                    self.executor.execute(record.id)
+                except Exception as exc:  # noqa: BLE001 - one bad run must not stop the queue
+                    current = self.runs.find(record.id)
+                    if current is not None and not current.state.terminal:
+                        # Otherwise the same record is picked up again on the next poll, forever.
+                        self.runs.update(record.id, state=RunState.FAILED, finished_at=time.time(),
+                                         error=f"{type(exc).__name__}: {exc}")
+            return served
+        finally:
+            if worker is not None:
+                worker.release()

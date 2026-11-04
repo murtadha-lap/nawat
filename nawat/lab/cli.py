@@ -232,14 +232,31 @@ def cmd_exp_approve(cache, args) -> int:
         print("\nEvery experiment above shares the parameters shown for the first, except the varied ones.")
         typed = input(f"Type the sweep's approval code ({sweep.code[:2]}…) to approve all {len(experiments)}: ")
         sweep_mod.approve(config, sweep, typed)
+        if args.queue:
+            print(f"Approved sweep {sweep.id}. Queuing its experiments:")
+            return _queue_all(cache, sweep.experiments(config))
         print(f"Approved sweep {sweep.id}. Run it: nawat sweep run {sweep.id}")
         return 0
     experiment = find(config, args.name)
     _print_plan(experiment)
     typed = input("\nRead the table above. Type the approval code to approve: ")
     exp_mod.approve(experiment, typed, config)
+    if args.queue:
+        print(f"Approved {experiment.name}.")
+        return run_experiment(cache, experiment, queue=True)
     print(f"Approved {experiment.name}. Run it: nawat exp run {experiment.name}")
     return 0
+
+
+def _queue_all(cache, experiments) -> int:
+    code = 0
+    for experiment in experiments:
+        try:
+            code = run_experiment(cache, experiment, queue=True) or code
+        except NawatError as exc:
+            _main()._err(f"{experiment.name}: {exc}")
+            code = code or exc.exit_code
+    return code
 
 
 def experiment_spec(experiment: Experiment, fresh: bool = False):
@@ -269,15 +286,39 @@ def run_experiment(cache, experiment: Experiment, *, queue: bool = False, fresh:
             raise NawatError(f"Experiment {experiment.name} runs in the sandbox, which is not running.", "Start it: nawat sandbox up")
         print(f"running {experiment.name} inside sandbox {container}")
         # The approval was verified above with the host's key. The sandbox has none, so it is told what was verified.
-        return sbx.call(sbx.exec_args(container, ["nawat", "exp", "run", experiment.name] + (["--fresh"] if fresh else []),
-                                      interactive=False, env={exp_mod.HOST_VERIFIED_ENV: experiment.plan_hash}))
+        command = ["nawat", "exp", "run", experiment.name] + (["--fresh"] if fresh else []) + (["--queue"] if queue else [])
+        return sbx.call(sbx.exec_args(container, command, interactive=False,
+                                      env={exp_mod.HOST_VERIFIED_ENV: experiment.plan_hash}))
+    from ..gpulock import claim
+    from ..runs import new_run_id
+
     cli = _main()
     executor = cli._executor(cache)
+    pending = pending_attempt(executor.runs, experiment)
+    if pending is not None:
+        raise Protected(f"{experiment.name} already has run {pending.id}, which is {pending.state.value}.",
+                        f"Let it finish, or take it out of the queue: nawat exp cancel {experiment.name}")
     spec = experiment_spec(experiment, fresh)
     executor.validate(spec)
-    record = executor.runs.create(spec, None, name=experiment.name)
-    experiment.add_attempt(record.id)
-    return cli._launch(executor, record, queue=queue)
+    run_id = new_run_id()
+    # Run here: this terminal owns the run while it waits for the GPU, so the queue leaves it alone.
+    owner = None if queue else claim(executor.runs.directory(run_id))
+    try:
+        record = executor.runs.create(spec, run_id, name=experiment.name)
+        experiment.add_attempt(record.id)
+        return cli._launch(executor, record, queue=queue)
+    finally:
+        if owner is not None:
+            owner.release()
+
+
+def pending_attempt(runs, experiment: Experiment):
+    """The experiment's attempt that is queued or running on this machine, if there is one."""
+    for run_id in reversed(experiment.attempts()):
+        record = runs.find(run_id)
+        if record is not None and not record.state.terminal:
+            return record
+    return None
 
 
 def cmd_exp_run(cache, args) -> int:
@@ -354,6 +395,77 @@ def cmd_exp_cancel(cache, args) -> int:
             return delegated
         raise _not_here(experiment, run_id, "a process to stop")
     return main.cmd_cancel(cache, argparse.Namespace(run_id=run_id))
+
+
+def cmd_exp_queue(cache, args) -> int:
+    """What is on the GPU, what waits for it and in which order, and roughly when each starts."""
+    from .. import gpulock
+    from ..executor import RunQueue
+
+    executor = _main()._executor(cache)
+    if args.work:
+        served = RunQueue(executor, poll=executor.poll).serve_until_empty()
+        print(f"queue worker: ran {served} run(s); nothing is left in the queue for it")
+        return 0
+    executor.drop_abandoned()
+    runs = executor.runs
+    holder = gpulock.gpu_holder(cache.config)
+    now = time.time()
+    typical = _typical_durations(runs)
+    rows: list[dict] = []
+    clock: float | None = now
+    current = runs.find(holder["run"]) if holder and holder.get("run") else None
+    if holder is not None:
+        if current is not None and not current.state.terminal:
+            expected = typical.get(current.spec.script)
+            left = max(0.0, expected - (current.duration or 0.0)) if expected else None
+            clock = now + left if left is not None else None
+            rows.append({"position": 0, "run": current.id, "experiment": current.name, "state": current.state.value,
+                         "by": "running", "started_at": current.started_at, "expected_start": current.started_at})
+        else:  # a run this machine does not know: the sandbox's, or the host's seen from the sandbox
+            clock = None
+            rows.append({"position": 0, "run": holder.get("run"), "experiment": holder.get("name"), "state": "running",
+                         "by": f"running ({holder.get('where', 'elsewhere')})", "started_at": holder.get("since"),
+                         "expected_start": holder.get("since")})
+    for position, record in enumerate(runs.queued(), start=1):
+        owner = gpulock.owner_state(runs.directory(record.id))
+        rows.append({"position": position, "run": record.id, "experiment": record.name, "state": "queued",
+                     "by": "terminal" if owner == "waiting" else "queue", "submitted_at": record.submitted_at,
+                     "expected_start": clock})
+        expected = typical.get(record.spec.script)
+        clock = clock + expected if clock is not None and expected else None
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        print("Nothing is running and nothing is queued.")
+        return 0
+
+    def when(row) -> str:
+        if row["position"] == 0:
+            return f"started {human_age(now - row['started_at'])} ago" if row.get("started_at") else "running"
+        if row["expected_start"] is None:
+            return "unknown"
+        wait = row["expected_start"] - now
+        return "next" if wait <= 60 else f"in ~{human_age(wait)} ({time.strftime('%H:%M', time.localtime(row['expected_start']))})"
+
+    _table(["#", "run", "experiment", "runs from", "starts"],
+           [[str(r["position"]) if r["position"] else "▶", r["run"] or "?", r["experiment"] or "—", r["by"], when(r)]
+            for r in rows])
+    print("\nStart estimates come from how long earlier runs of the same experiment took; 'unknown' when none has finished."
+          "\nTake a run out of the queue: nawat exp cancel <experiment>")
+    return 0
+
+
+def _typical_durations(runs) -> dict[str, float]:
+    """The median duration of each script's succeeded runs."""
+    from ..runs import RunState
+
+    by_script: dict[str, list[float]] = {}
+    for record in runs.list(state=RunState.SUCCEEDED, limit=1000):
+        if record.duration:
+            by_script.setdefault(record.spec.script, []).append(record.duration)
+    return {script: sorted(values)[len(values) // 2] for script, values in by_script.items()}
 
 
 def cmd_exp_ls(cache, args) -> int:
@@ -594,6 +706,9 @@ def cmd_sweep_run(cache, args) -> int:
         if state == "succeeded" and not args.again:
             print(f"skip {experiment.name} (already succeeded)")
             continue
+        if state in ("queued", "staging", "running", "publishing"):
+            print(f"skip {experiment.name} (already {state})")
+            continue
         print(f"\n### {experiment.name}  {experiment.data.get('sweep_values')}")
         result = run_experiment(cache, experiment, queue=args.queue)
         code = code or result
@@ -754,10 +869,11 @@ def register(sub) -> None:
     p.set_defaults(run=cmd_exp_plan)
     p = exp.add_parser("approve", help="read the plan and approve it (a person, at a terminal, on the host)")
     p.add_argument("name", help="experiment or sweep id")
+    p.add_argument("--queue", action="store_true", help="and queue it (every experiment of a sweep) to run when the GPU is free")
     p.set_defaults(run=cmd_exp_approve)
-    p = exp.add_parser("run", help="run an approved experiment")
+    p = exp.add_parser("run", help="run an approved experiment (it waits its turn if the GPU is busy)")
     p.add_argument("name")
-    p.add_argument("--queue", action="store_true", help="hand it to the control plane instead of running here")
+    p.add_argument("--queue", action="store_true", help="queue it and return; it runs when the GPU is free, without this terminal")
     p.add_argument("--fresh", action="store_true", help="ignore its checkpoints and start from step 0")
     p.add_argument("--here", action="store_true", help="run on this machine even if its runtime is the sandbox")
     p.set_defaults(run=cmd_exp_run)
@@ -771,9 +887,13 @@ def register(sub) -> None:
     p.add_argument("-f", "--follow", action="store_true", help="stream points as they are written")
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_exp_metrics)
-    p = exp.add_parser("cancel", help="stop an experiment's running attempt")
+    p = exp.add_parser("cancel", help="stop an experiment's running attempt, or take it out of the queue")
     p.add_argument("name")
     p.set_defaults(run=cmd_exp_cancel)
+    p = exp.add_parser("queue", help="what is on the GPU and what waits for it, in order, with estimated start times")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--work", action="store_true", help="run the queued runs here until none are left (normally started for you)")
+    p.set_defaults(run=cmd_exp_queue)
     p = exp.add_parser("ls", help="every experiment")
     p.add_argument("--group")
     p.add_argument("--json", action="store_true")
@@ -845,6 +965,7 @@ def register(sub) -> None:
     p.set_defaults(run=cmd_sweep_run)
     p = sweep.add_parser("approve", help="same as: nawat exp approve <sweep id>")
     p.add_argument("name")
+    p.add_argument("--queue", action="store_true", help="and queue every experiment to run when the GPU is free")
     p.set_defaults(run=cmd_exp_approve)
 
     store = sub.add_parser("store", help="what object storage holds: list, size, download, delete").add_subparsers(dest="store_cmd", required=True)
