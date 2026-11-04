@@ -56,6 +56,7 @@ nawat exp report llm-grpo/20261102-ab12          # plain text, for you or an age
 | STT | `stt` | `stt-whisper` | Whisper |
 | Embedding | `embedding` | `embedding` | Qwen3-Embedding (0.6B) |
 | Decision | `decision` | `decision` | Qwen3.5 (4B) Decision |
+| LLM, VLM | `eval-only` | `llm-eval` | — (no training: evaluates a model as stored) |
 
 A *decision* model is a typed-answer model, the open alternative to hosted
 decision APIs. It reads an input and answers declared questions with a `choice`
@@ -244,6 +245,34 @@ generation settings (and, for held-out evals, the training data split). `nawat
 exp compare` puts eval numbers side by side only when the fingerprints match. If
 two experiments were measured differently, compare says so and withholds those
 numbers, unless `--force` shows them marked ⚠.
+
+### Evaluating without training
+
+The `eval-only` backbone loads the model, runs every eval block (and any export
+block) and takes no optimizer step, so it measures the model as stored: a base
+model for a baseline, or a finished run's output to score it on an eval it was
+not planned with, or to see what fine-tuning cost on general benchmarks. Plan
+one experiment per model from the same preset, changing only `--model`, and the
+fingerprints match:
+
+```bash
+nawat exp plan llm-eval --group forgetting --name base
+nawat exp plan llm-eval --group forgetting --name mixed --model runs/iraqi-sft/mixed/adapter
+nawat exp compare forgetting/base forgetting/mixed
+```
+
+A run's `adapter` folder holds the full weights after full fine-tuning; a LoRA
+adapter folder also needs its base model. Dataset and template blocks written
+for any training method fit `eval-only`, so a held-out eval sees the same split
+as the run it is compared with. Its report says "Training: none".
+
+**Thinking mode.** The model blocks' `chat_template_kwargs` are passed to the
+chat template for every generation prompt. For Qwen3,
+`--set 'model.chat_template_kwargs={"enable_thinking": false}'` (the `llm-eval`
+default) asks for a direct answer, so a base model does not spend its tokens in a
+`<think>` block while a fine-tuned one answers at once. They count in the eval
+fingerprints: measurements taken with different settings do not compare. Set the
+same value in the training runs you compare with.
 
 ## Comparing and sweeping
 

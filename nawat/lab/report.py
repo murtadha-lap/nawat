@@ -203,6 +203,7 @@ def build(experiment: Experiment, config=None) -> dict[str, Any]:
         "preset": d["preset"],
         "backbone": {"name": d["backbone"]["name"], "sha256": d["backbone"]["sha256"],
                      "config_class": d["backbone"].get("config_class")},
+        "trains": bool(d["backbone"].get("trains", True)),
         "blocks": {slot: [f"{b['name']}@{b['sha256'][:12]}" for b in entries] for slot, entries in d["blocks"].items()},
         "inputs": d["inputs"],
         "params_changed": changed_params(experiment),
@@ -255,6 +256,8 @@ def render(report: Mapping[str, Any]) -> str:
                  + (f" — {r['preset']['description']}" if r["preset"].get("description") else ""))
     lines.append(f"- **Backbone:** {r['backbone']['name']}@{r['backbone']['sha256'][:12]}"
                  + (f" ({r['backbone']['config_class']})" if r["backbone"].get("config_class") else ""))
+    if not r.get("trains", True):
+        lines.append("- **Training:** none — evaluates the model as stored")
     lines.append(f"- **Model:** {r['inputs']['model'] or '—'}")
     lines.append(f"- **Datasets:** {', '.join(r['inputs']['datasets']) or '—'}")
     if r["inputs"]["inputs"]:
@@ -284,7 +287,7 @@ def render(report: Mapping[str, Any]) -> str:
                 took = f", {(a['finished_at'] - a['started_at']) / 60:.1f} min"
             lines.append(f"- {a['id']}: {a.get('state')}{took}" + (f" — {a['error']}" if a.get("error") else ""))
     training = r.get("training") or {}
-    if training:
+    if training and r.get("trains", True):
         lines += ["", "## Training", "", "| metric | first | last | min (step) | mean of last 10 % |", "| --- | --- | --- | --- | --- |"]
         shown = [k for k in KEY_FIELDS if k in training] + sorted(k for k in training if k.startswith(("rewards/", "reward_")) and k not in KEY_FIELDS)
         for key in shown:

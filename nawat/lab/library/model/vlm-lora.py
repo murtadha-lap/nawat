@@ -24,6 +24,8 @@ PARAMS = {
     "use_gradient_checkpointing": P("unsloth", "true, false or \"unsloth\"", type=str),
     "random_state": P(3407, "Seed for adapter initialisation"),
     "use_rslora": P(False, "Rank-stabilised LoRA"),
+    "chat_template_kwargs": P({}, "Extra chat-template variables for generation prompts, e.g. {enable_thinking = false} "
+                              "for Qwen3 to answer without a <think> block", type=dict),
 }
 
 
@@ -105,7 +107,7 @@ def generate(ctx, p, model, tokenizer, items, max_new_tokens=256, temperature=0.
             if isinstance(messages, str):
                 content = ([{"type": "image"}] if item.get("image") is not None else []) + [{"type": "text", "text": messages}]
                 messages = [{"role": "user", "content": content}]
-            text = tokenizer.apply_chat_template(messages, add_generation_prompt=True)
+            text = tokenizer.apply_chat_template(messages, add_generation_prompt=True, **dict(p.chat_template_kwargs))
             image = item.get("image")
             inputs = (tokenizer(image, text, add_special_tokens=False, return_tensors="pt") if image is not None
                       else tokenizer(text=text, add_special_tokens=False, return_tensors="pt")).to(model.device)
