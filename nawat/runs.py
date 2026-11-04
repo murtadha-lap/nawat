@@ -361,10 +361,21 @@ class RunStore:
         ).fetchall()
         return [self._row(row) for row in rows]
 
+    def queued(self) -> list[RunRecord]:
+        """Every queued run, in the order they start: first submitted, first run."""
+        rows = self.db.connect().execute(
+            "SELECT * FROM runs WHERE state = ? ORDER BY submitted_at, id", (RunState.QUEUED.value,)
+        ).fetchall()
+        return [self._row(row) for row in rows]
+
+    def queued_before(self, record: RunRecord) -> list[RunRecord]:
+        """The queued runs that start before this one."""
+        return [r for r in self.queued() if (r.submitted_at, r.id) < (record.submitted_at, record.id)]
+
     def next_queued(self) -> RunRecord | None:
         """The head of the queue. Strictly FIFO — one GPU, so one run at a time."""
         row = self.db.connect().execute(
-            "SELECT * FROM runs WHERE state = ? ORDER BY submitted_at LIMIT 1", (RunState.QUEUED.value,)
+            "SELECT * FROM runs WHERE state = ? ORDER BY submitted_at, id LIMIT 1", (RunState.QUEUED.value,)
         ).fetchone()
         return self._row(row) if row else None
 
