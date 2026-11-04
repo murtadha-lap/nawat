@@ -187,6 +187,40 @@ def test_a_cancel_during_staging_never_starts_the_trainer(lab):
     assert final.state is RunState.CANCELLED and final.pid is None and final.exit_code is None
 
 
+# -- a live run in the report (issue #8) -----------------------------------------------------
+
+
+def test_report_shows_a_live_run_as_running_not_interrupted(lab):
+    from nawat.lab.cli import experiment_spec
+
+    experiment = lab.plan("live")
+    lab.approve(experiment)
+    executor = cli._executor(lab.cache)
+    record = executor.runs.create(experiment_spec(experiment), None, name=experiment.name)
+    experiment.add_attempt(record.id)  # what `nawat exp run` does before the run starts
+    loaded = lambda: E.Experiment.load(experiment.dir)  # noqa: E731
+
+    assert rep.status(loaded()) == "queued"
+    executor.runs.update(record.id, state=RunState.STAGING, started_at=time.time())
+    assert rep.status(loaded(), lab.config) == "staging"
+    executor.runs.update(record.id, state=RunState.RUNNING, pid=os.getpid())  # a trainer that is alive
+    report = rep.build(loaded(), lab.config)
+    assert report["status"] == "running"
+    assert report["attempts"][0]["id"] == record.id and report["attempts"][0]["state"] == "running"
+    assert "- **Status:** running" in rep.render(report)
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    executor.runs.update(record.id, pid=gone.pid)  # its trainer died and nothing recorded the end
+    assert rep.status(loaded(), lab.config) == "interrupted"
+
+
+def test_report_still_says_interrupted_for_an_attempt_nobody_knows(lab):
+    experiment = lab.plan("lost")
+    experiment.add_attempt("2026-01-01-dead")  # no record.json, and no run of that id in the run store
+    assert rep.status(E.Experiment.load(experiment.dir), lab.config) == "interrupted"
+
+
 # -- smaller repairs ----------------------------------------------------------------------
 
 

@@ -226,7 +226,7 @@ def cmd_exp_approve(cache, args) -> int:
         sweep = sweep_mod.load(config, args.name)
         experiments = sweep.experiments(config)
         print(f"Sweep {sweep.id}: {len(experiments)} experiments from preset {sweep.data['preset']}")
-        result = rep.compare(experiments, show_all=False)
+        result = rep.compare(experiments, show_all=False, config=config)
         print(rep.render_compare(result).split("## Results")[0])
         _print_plan(experiments[0])
         print("\nEvery experiment above shares the parameters shown for the first, except the varied ones.")
@@ -359,14 +359,14 @@ def cmd_exp_cancel(cache, args) -> int:
 def cmd_exp_ls(cache, args) -> int:
     experiments = [e for e in list_experiments(cache.config) if not args.group or e.data.get("group") == args.group]
     if args.json:
-        print(json.dumps([{"name": e.name, "status": rep.status(e), "preset": e.data["preset"]["name"],
+        print(json.dumps([{"name": e.name, "status": rep.status(e, cache.config), "preset": e.data["preset"]["name"],
                            "created_at": e.data.get("created_at"), "sweep": e.data.get("sweep")} for e in experiments], indent=2))
         return 0
     if not experiments:
         print("No experiments yet. Start with: nawat preset ls, then nawat exp plan <preset>")
         return 0
     now = time.time()
-    rows = [[e.name, rep.status(e), e.data["backbone"]["name"], (e.data["inputs"]["model"] or "").replace("models/", ""),
+    rows = [[e.name, rep.status(e, cache.config), e.data["backbone"]["name"], (e.data["inputs"]["model"] or "").replace("models/", ""),
              human_age(now - e.data.get("created_at", now)), e.data.get("sweep") or ""] for e in experiments]
     _table(["experiment", "status", "backbone", "model", "age", "sweep"], rows, right={4})
     return 0
@@ -380,10 +380,10 @@ def cmd_exp_show(cache, args) -> int:
 def cmd_exp_report(cache, args) -> int:
     experiments = [find(cache.config, n) for n in args.names]
     if args.compare or len(experiments) > 1:
-        result = rep.compare(experiments, show_all=args.all, force=args.force)
+        result = rep.compare(experiments, show_all=args.all, force=args.force, config=cache.config)
         print(json.dumps(result, indent=2, default=str) if args.json else rep.render_compare(result, for_agent=True))
         return 0
-    report = rep.build(experiments[0])
+    report = rep.build(experiments[0], cache.config)
     print(json.dumps(report, indent=2, default=str) if args.json else rep.render(report))
     return 0
 
@@ -392,7 +392,7 @@ def cmd_exp_compare(cache, args) -> int:
     experiments = [find(cache.config, n) for n in args.names]
     if len(experiments) < 2:
         raise NawatError("Compare needs at least two experiments.")
-    result = rep.compare(experiments, show_all=args.all, force=args.force)
+    result = rep.compare(experiments, show_all=args.all, force=args.force, config=cache.config)
     if args.json:
         print(json.dumps(result, indent=2, default=str))
         return 0
@@ -568,7 +568,7 @@ def cmd_sweep_plan(cache, args) -> int:
                                  sets=_pairs(args.set, "setting"), uses=_pairs(args.use, "block choice"),
                                  datasets=args.dataset or None, notes=args.notes or "", group=args.group, store=cache.store)
     experiments = sweep.experiments(cache.config)
-    result = rep.compare(experiments)
+    result = rep.compare(experiments, config=cache.config)
     names = [n.split("/", 1)[-1] for n in result["experiments"]]
     print(f"Sweep {sweep.id}: {len(experiments)} experiments")
     _table([""] + names, [[label] + [rep._fmt(v) for v in values] for label, values in result["differences"]])
@@ -579,7 +579,7 @@ def cmd_sweep_plan(cache, args) -> int:
 def cmd_sweep_ls(cache, args) -> int:
     rows = []
     for sweep in sweep_mod.list_sweeps(cache.config):
-        statuses = [rep.status(e) for e in sweep.experiments(cache.config)]
+        statuses = [rep.status(e, cache.config) for e in sweep.experiments(cache.config)]
         summary = ", ".join(f"{statuses.count(s)} {s}" for s in sorted(set(statuses)))
         rows.append([sweep.id, sweep.data["preset"], str(len(statuses)), summary])
     _table(["sweep", "preset", "experiments", "status"], rows)
@@ -590,7 +590,7 @@ def cmd_sweep_run(cache, args) -> int:
     sweep = sweep_mod.load(cache.config, args.id)
     code = 0
     for experiment in sweep.experiments(cache.config):
-        state = rep.status(experiment)
+        state = rep.status(experiment, cache.config)
         if state == "succeeded" and not args.again:
             print(f"skip {experiment.name} (already succeeded)")
             continue
