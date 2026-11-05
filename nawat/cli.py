@@ -710,6 +710,8 @@ def cmd_api(cache: Cache, args) -> int:
         return 1
     config = cache.config
     _err(f"Nawāt control plane on http://{config.api_host}:{config.api_port}")
+    if config.api_token and config.api_open_inference:
+        _err("NAWAT_API_OPEN_INFERENCE is on: /v1 models, chat, completions, embeddings and responses answer without the token.")
     if not config.api_token:
         _err("No NAWAT_API_TOKEN is set, so the API is unauthenticated. Bind it to the loopback only.")
     serve_api(config)

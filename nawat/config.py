@@ -144,6 +144,11 @@ class Config:
     api_host: str = "127.0.0.1"
     api_port: int = 8080
     api_token: str | None = field(default=None, repr=False)
+    #: Let the inference endpoints of /v1 (models, chat, completions, embeddings,
+    #: responses) answer without the token, for clients on a trusted network that
+    #: cannot send one. Everything else — the platform's own endpoints and vLLM's
+    #: adapter loading — still requires it.
+    api_open_inference: bool = False
 
     #: The inference server this session manager supervises. It always binds
     #: loopback: vLLM authenticates nothing, so the network-facing address is
@@ -193,6 +198,7 @@ class Config:
             api_host=env.get("NAWAT_API_HOST", "127.0.0.1"),
             api_port=_int(env, "NAWAT_API_PORT", 8080),
             api_token=env.get("NAWAT_API_TOKEN") or None,
+            api_open_inference=_flag(env, "NAWAT_API_OPEN_INFERENCE", False),
             serve_port=_int(env, "NAWAT_SERVE_PORT", 8001),
             serve_idle_timeout=_float(env, "NAWAT_SERVE_IDLE_TIMEOUT", 900.0),
             serve_startup_timeout=_float(env, "NAWAT_SERVE_STARTUP_TIMEOUT", 600.0),

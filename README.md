@@ -703,6 +703,12 @@ curl http://192.168.0.207:8081/v1/completions \
 Proxied requests also refresh the idle timer, so a session in active use is not
 reclaimed underneath you.
 
+Clients on a trusted network that cannot send a token can be let in to the model
+alone with `NAWAT_API_OPEN_INFERENCE=1`: `GET /v1/models` and `POST /v1/chat/completions`,
+`/v1/completions`, `/v1/embeddings` and `/v1/responses` then answer without it.
+Everything else — the platform's endpoints, and vLLM's adapter loading — still
+requires the token, so keep one set.
+
 ### 3. Start the matching base
 
 Do not serve while a training job is using the GPU.

@@ -63,6 +63,17 @@ class FreeBody(BaseModel):
     dry_run: bool = False
 
 
+#: What NAWAT_API_OPEN_INFERENCE opens: asking the model, and listing it. Exact
+#: paths, so nothing else under /v1 — vLLM's load_lora_adapter in particular,
+#: which reads any path on this host — ever answers without the token.
+OPEN_INFERENCE = frozenset({
+    ("GET", "models"),
+    ("POST", "chat/completions"),
+    ("POST", "completions"),
+    ("POST", "embeddings"),
+    ("POST", "responses"),
+})
+
 # -- application --------------------------------------------------------------
 
 
@@ -146,6 +157,12 @@ def create_app(
             raise HTTPException(status_code=401, detail="A valid token is required. Set NAWAT_API_TOKEN and send it as a bearer token.")
 
     guard = [Depends(authorise)]
+
+    def authorise_inference(request: Request, path: str) -> None:
+        """The token, unless NAWAT_API_OPEN_INFERENCE opens this exact inference endpoint."""
+        if platform.config.api_open_inference and (request.method, path) in OPEN_INFERENCE:
+            return
+        authorise(request)
 
     @app.exception_handler(NawatError)
     async def nawat_error(request: Request, exc: NawatError) -> JSONResponse:
@@ -447,11 +464,12 @@ def create_app(
 
     # -- OpenAI-compatible passthrough -------------------------------------
 
-    @app.api_route("/v1/{path:path}", methods=["GET", "POST", "DELETE"], dependencies=guard)
+    @app.api_route("/v1/{path:path}", methods=["GET", "POST", "DELETE"])
     async def openai_proxy(path: str, request: Request) -> Any:
         """A stable address in front of an ephemeral server (FR-4.5)."""
         import httpx
 
+        authorise_inference(request, path)
         session = platform.sessions.require()
         platform.sessions.touch(session)
         url = f"{session.base_url}/v1/{path}"

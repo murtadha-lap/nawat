@@ -254,6 +254,40 @@ def test_health_hides_details_without_the_token(lab, monkeypatch):
         assert client.get("/config", headers={"Authorization": "Bearer secret"}).status_code == 200
 
 
+def test_open_inference_opens_only_the_model(lab, monkeypatch):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from nawat.api import create_app
+    from nawat.config import Config
+
+    monkeypatch.setenv("NAWAT_API_TOKEN", "secret")
+    monkeypatch.setenv("NAWAT_API_OPEN_INFERENCE", "1")
+    app = create_app(Config.from_env(env_file=None), start_queue=False, sweep_idle=False)
+    with TestClient(app) as client:
+        # No session is running, so an open endpoint gets past the token and is told that (404), not 401.
+        assert client.get("/v1/models").status_code == 404
+        assert client.post("/v1/chat/completions", json={}).status_code == 404
+        assert client.post("/v1/load_lora_adapter", json={}).status_code == 401
+        assert client.post("/v1/chat/completions/../load_lora_adapter", json={}).status_code == 401
+        assert client.get("/config").status_code == 401
+        assert client.delete("/sessions").status_code == 401
+        assert client.post("/v1/load_lora_adapter", json={}, headers={"Authorization": "Bearer secret"}).status_code == 404
+
+
+def test_inference_needs_the_token_unless_opened(lab, monkeypatch):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from nawat.api import create_app
+    from nawat.config import Config
+
+    monkeypatch.setenv("NAWAT_API_TOKEN", "secret")
+    app = create_app(Config.from_env(env_file=None), start_queue=False, sweep_idle=False)
+    with TestClient(app) as client:
+        assert client.post("/v1/chat/completions", json={}).status_code == 401
+
+
 def test_readme_installs_what_the_sandbox_installs():
     from nawat.lab.sandbox import TRAINING_STACK
 
