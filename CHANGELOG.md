@@ -1,27 +1,43 @@
 # Changelog
 
-## Unreleased
+## 0.3.0b2 — beta (2026-11-05)
 
-- Evaluate a model without training it (#9): the `eval-only` backbone and the
-  `llm-eval` preset load a model — a base model, or a finished run's
-  `runs/<group>/<experiment>/adapter` — and run every eval block without an
-  optimizer step. Its plan and report say "Training: none". Dataset and
-  template blocks of any training method fit it.
-- `model.chat_template_kwargs` (`llm-lora`, `vlm-lora`) passes variables to the
-  chat template for generation prompts, e.g. Qwen3's `enable_thinking=false`,
-  so base and fine-tuned models answer under the same prompt. When set, it is
-  part of every eval fingerprint.
+One GPU, used in turn; models measured without training; a status you can
+trust while a run trains. Also the fixes from a review of 0.3.0b1.
 
-- Runs take turns on the one GPU (#10). Every run holds a GPU lock (a file
-  lock in the workspace, shared with the sandbox) from staging to its last
-  upload, and runs start in the order they were submitted. A plain
-  `nawat exp run` waits as `queued` while the GPU is busy, saying in its log
-  what it waits for; Ctrl-C takes it out of the queue. `--queue` no longer
-  needs `nawat api`: a worker (`nawat exp queue --work`) is started when nothing
-  else serves the queue. New: `nawat exp approve --queue`, and `nawat exp queue`
-  to see the queue with estimated start times. `nawat exp cancel` takes a
-  queued run out of the queue. An experiment can have only one attempt queued
-  or running, and `nawat sweep run` skips experiments already queued or running.
+### New
+
+- **Runs take turns on the GPU** (#10). Every run holds a GPU lock — a file
+  lock in the workspace, so the sandbox shares it — from staging to its last
+  upload, and runs start in the order they were submitted.
+  - A plain `nawat exp run` waits as `queued` while the GPU is busy and says in
+    its log what it waits for; Ctrl-C takes it out of the queue.
+  - `--queue` no longer needs `nawat api`: when nothing serves the queue, a
+    worker (`nawat exp queue --work`) is started for you and stops when the
+    queue is empty.
+  - `nawat exp approve --queue` approves and queues in one step (a sweep id
+    queues every experiment); `nawat exp queue` shows what is on the GPU and
+    what waits, with estimated start times; `nawat exp cancel` takes a queued
+    run out of the queue.
+  - An experiment can have only one attempt queued or running, and
+    `nawat sweep run` skips experiments already queued or running.
+- **Evaluate a model without training it** (#9). The `eval-only` backbone and
+  the `llm-eval` preset load a model — a base model, or a finished run's
+  `runs/<group>/<experiment>/adapter` — and run every eval block with no
+  optimizer step. Plans and reports say "Training: none". Dataset and template
+  blocks of any training method fit it, so held-out evals see the same split as
+  the runs they are compared with.
+- **`model.chat_template_kwargs`** (`llm-lora`, `vlm-lora`) passes variables to
+  the chat template for every generation prompt — for Qwen3,
+  `{"enable_thinking": false}` — so a base model and its fine-tuned versions
+  answer under the same prompt. When set, it is part of every eval fingerprint.
+- **`NAWAT_API_OPEN_INFERENCE=1`** lets clients on a trusted network that cannot
+  send a token use the model: `GET /v1/models` and `POST /v1/chat/completions`,
+  `/v1/completions`, `/v1/embeddings` and `/v1/responses` answer without it.
+  Everything else — the platform's endpoints, and vLLM's adapter loading —
+  still requires the token.
+
+### Fixed
 
 - `nawat exp report`, `exp ls` and `sweep ls` showed an experiment that was
   still training as "interrupted" (#8). An attempt without a run record now
@@ -29,8 +45,7 @@
   and is "interrupted" only when the run store does not know it, or its trainer
   process is gone.
 
-Fixes from a review of 0.3.0b1. Each has a regression test in
-`tests/test_regressions.py`.
+From a review of 0.3.0b1, each with a regression test in `tests/test_regressions.py`:
 
 - `nawat registry` (and the API's `/registry`) failed with InvalidKey once any
   experiment had run: the runner left `code/__pycache__` in the experiment
@@ -78,6 +93,29 @@ Fixes from a review of 0.3.0b1. Each has a regression test in
   kernel-run accessors (`nawat.Run`, `nawat.current_run`), the `.ipynb`
   executor path, the run-naming prompt and the training-script scanner in
   `nawat.estimator`.
+
+### Upgrading from 0.3.0b1
+
+- **Eval comparisons with older experiments.** `support.py`, which every
+  experiment freezes and every eval fingerprint includes, changed. Experiments
+  planned with 0.3.0b2 do not compare evals with ones planned before; `nawat
+  exp compare` says so, and `--force` shows the numbers marked ⚠. Experiments
+  already planned run and report exactly as before.
+- **A workspace block named `eval-only`.** Built-in blocks are found first, so
+  new plans now use the built-in `eval-only`, which has no `enable_thinking`
+  parameter. Move that setting to `model.chat_template_kwargs` (and pass it to
+  `support.causal_generate` in a custom model block), or save the workspace
+  block under another name with `nawat block save-as`. Experiments already
+  planned keep their frozen copy.
+
+### Known issues
+
+- `uv run nawat serve` puts the training environment first on `PATH`, so if
+  that environment has its own (older) vLLM, that one is launched instead of the
+  separate serving install. Run `.venv/bin/nawat serve` with the serving vLLM
+  first on `PATH` until the executable can be configured.
+- A Nawāt download holds the cache lock while it runs, so `nawat serve` waits
+  for any other `nawat resolve` to finish first.
 
 ## 0.3.0b1 — beta (2026-11-02)
 

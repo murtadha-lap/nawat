@@ -64,7 +64,7 @@ from .notebook import (
 from .store import VerificationResult
 from .units import human_bytes, parse_size
 
-__version__ = "0.3.0b1"
+__version__ = "0.3.0b2"
 
 _default: Cache | None = None
 _default_lock = threading.Lock()
